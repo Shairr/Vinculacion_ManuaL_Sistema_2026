@@ -1,0 +1,1180 @@
+# Sección Pasarela de Pagos Payphone
+
+\begin{importantbox}
+\textbf{Importante:} Proteja las credenciales de producción en el servidor y recuerde que Payphone revierte la transacción automáticamente si el pago no se confirma en 5 minutos.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} Esta integración permite el pago seguro en un modelo multi-emprendedor, gestionando tokens dinámicos independientes para cada vendedor del sistema.
+\end{infobox}
+
+## Visión General
+
+La integración de Payphone en el sistema de tienda virtual multi-emprendedor permite a los clientes pagar sus compras usando la Cajita de Pagos de Payphone (tarjeta de crédito/débito o la app móvil de Payphone). El diseño fue pensado para soportar múltiples emprendedores con credenciales independientes.
+
+Notas:
+
+1. **Modo Sandbox:** Todas las transacciones en modo test se aprueban automáticamente. No se realizan cobros reales.
+2. **Dominio autorizado:** La cajita solo carga si el dominio de la app está registrado en el portal de Payphone Developer.
+3. **Localhost:** Payphone permite `http://localhost` para pruebas sin SSL.
+4. **Timeout de confirmación:** Si no se confirma el pago en los primeros 5 minutos, Payphone revierte automáticamente la transacción.
+5. **Multi-emprendedor:** El sistema soporta múltiples emprendedores con diferentes credenciales. Los tokens se gestionan dinámicamente desde la base de datos.
+
+| Característica | Descripción |
+|---|---|
+| Multi-Emprendedor | Cada emprendedor tiene su propio appId y token de Payphone |
+| Credenciales Dinámicas | Los tokens se obtienen de la base de datos en tiempo real |
+| Proxy Backend Seguro | La confirmación de pago se hace desde el servidor, no desde el navegador |
+| Creación Automática de Venta | Tras confirmación exitosa, se registra la venta en msvc-ventas |
+| Reintentos Automáticos | El proxy backend implementa hasta 3 reintentos con backoff |
+
+: Características Clave de la Integración
+
+
+## Arquitectura del Sistema
+
+```{mermaid}
+%%| fig-width: 8
+%%| fig-height: 7
+%%| fig-align: center
+
+graph TB
+
+%% =========================
+%% BANDA INVISIBLE SUPERIOR (independiente - amplía el canvas)
+%% =========================
+
+subgraph SpacerTop[" "]
+    direction LR
+    ST1[" "] ~~~ ST2[" "] 
+end
+
+%% =========================
+%% FRONTEND
+%% =========================
+
+subgraph Front["<b>FRONTEND (Next.js)</b>"]
+    direction LR
+
+    Checkout["[Checkout Page]"]
+    Selector["[PaymentMethodSelector]"]
+    Form["[PayphoneForm]"]
+    Node4["[Carga SDK Payphone<br/>con appId dinámico]"]
+   
+
+    Checkout --> Selector --> Form --> Node4 
+
+   
+end
+
+%% =========================
+%% FLUJO USUARIO
+%% =========================
+
+Select["Usuario selecciona<br/><b>Payphone</b>"]
+
+Complete["Usuario completa pago"]
+
+Front --> Select
+Select --> Complete
+
+%% =========================
+%% SDK PAYPHONE
+%% =========================
+
+SDK["SDK Payphone"]
+
+CDN["cdn.payphonetodoesposible.com/box/v2.0/"]
+
+Redirect["Redirige a"]
+
+Callback["/checkout/payphone-confirmacion?id=XXXXX&<br/>clientTransactionId=YYYYY&emprendedorId=ZZZ"]
+
+Front --> SDK
+SDK --> CDN
+CDN --> Redirect
+Redirect --> Callback
+
+%% =========================
+%% API ROUTE
+%% =========================
+
+subgraph API["<b>API ROUTE (Servidor Next.js)</b>"]
+
+Confirm["<b>POST &nbsp;/api/payphone/confirm</b><br/><br/>
+1. Recibe id, clientTxId, emprendedorId<br/>
+2. Consulta token del emprendedor → msvc-auth (port 8084)<br/>
+3. Llama a Payphone API con headers de navegador<br/>
+4. Retorna resultado de confirmación al frontend"]
+
+end
+
+Complete --> Confirm
+Callback --> Confirm
+
+Status["statusCode == 3 (Aprobado)"]
+
+Confirm --> Status
+
+%% =========================
+%% MICROSERVICIO VENTAS
+%% =========================
+
+subgraph Sales["<b>MICROSERVICIO VENTAS (port 8083)</b>"]
+
+Ventas["<b>POST &nbsp;/api/ventas</b><br/><br/>
+— Crea registro de venta<br/>
+— Asocia al emprendedor correcto<br/>
+— Actualiza historial del cliente<br/>
+— Genera número de factura<br/><br/>
+
+<b>PUT &nbsp;/api/ventas/{id}/completar</b><br/><br/>
+— Actualiza estado de venta a COMPLETADA"]
+
+end
+
+Status --> Ventas
+
+%% =========================
+%% BANDA INVISIBLE INFERIOR (independiente - amplía el canvas)
+%% =========================
+
+subgraph SpacerBottom[" "]
+    direction LR
+    SB1[" "] ~~~ SB2[" "] 
+end
+
+%% =========================
+%% ESTILOS
+%% =========================
+
+classDef frontend fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000;
+classDef process fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000;
+classDef api fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000;
+classDef sales fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000;
+classDef text fill:#ffffff,stroke:#ffffff,color:#000;
+classDef invisible fill:none,stroke:none,color:transparent;
+
+class Checkout,Selector,Form,CDN,Callback frontend;
+class SDK,Redirect,Status,Select,Complete process;
+class Confirm api;
+class Ventas sales;
+class SDKText text;
+class ST1,ST2,ST3,ST4,ST5,ST6,ST7,ST8,ST9,ST10,ST11,ST12 invisible;
+class SB1,SB2,SB3,SB4,SB5,SB6,SB7,SB8,SB9,SB10,SB11,SB12 invisible;
+
+linkStyle default stroke:#000,stroke-width:2px;
+style Node4 fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+style Select fill:none,stroke:none,color:#000
+style Complete fill:none,stroke:none,color:#000
+style SDK fill:none,stroke:none,color:#000
+style Redirect fill:none,stroke:none,color:#000
+style Status fill:none,stroke:none,color:#000
+style SpacerTop fill:none,stroke:none,color:transparent
+style SpacerBottom fill:none,stroke:none,color:transparent
+```
+
+::: {.center}
+Figura 9: Arquitectura del flujo de integración con Payphone
+\addcontentsline{lof}{figure}{\protect\numberline{2}Arquitectura del flujo de integración con Payphone}
+:::
+
+| Microservicio | Puerto | Rol en Payphone |
+|---|---|---|
+| Frontend Next.js | 3000 | Renderiza botón Payphone, proxy de confirmación |
+| msvc-auth | 8084 | Almacena y provee credenciales (appId/token) por emprendedor |
+| msvc-ventas | 8083 | Registra la venta post-pago exitoso |
+| Payphone CDN | externo | Provee SDK del botón de pago |
+| Payphone API | externo | Confirma transacciones (paymentbox.payphonetodoesposible.com) |
+
+: Microservicios Involucrados
+
+## Flujo Completo de Pago
+
+**FASE 1: PREPARACIÓN DEL BOTÓN**
+
+1. Cliente llega al paso "Pago" del checkout
+2. Selecciona "Payphone" en `PaymentMethodSelector`
+3. `PayphoneForm` se monta y solicita tokens al microservicio de auth:
+   
+   http
+   GET http://localhost:8084/api/emprendedor/configuracion-pagos/payphone/{emprendedorId}
+4. Se obtienen: `payphoneAppId` y `payphoneToken`
+5. Se inyecta el SDK de Payphone en el DOM:
+   <script src="https://pay.payphonetodoesposible.com/api/button/js?appId={appId}">
+6. Se inicializa `window.payphone.Button({...})` con el token del emprendedor
+7. El botón de Payphone queda renderizado en el contenedor `#pp-button`
+
+**FASE 2: PAGO DEL CLIENTE**
+
+8. El cliente hace clic en el botón de Payphone
+9. Payphone abre su interfaz de pago (tarjeta o app)
+10. El cliente completa el pago
+11. Payphone redirige al cliente a:
+    /checkout/payphone-confirmacion?id=86XXXXXXX&clientTransactionId=ORD-1234567890&emprendedorId=1
+
+**FASE 3: CONFIRMACIÓN (SERVER-SIDE)**
+
+12. La página `payphone-confirmacion` captura los parámetros de la URL
+13. Llama a `payphoneService.confirmarPago(id, clientTxId, emprendedorId)`
+14. `payphoneService` hace POST a `/api/payphone/confirm` (API Route interna)
+15. La API Route:
+    a. Consulta el token del emprendedor en msvc-auth (puerto 8084)
+    b. Hace POST a `https://paymentbox.payphonetodoesposible.com/api/confirm` con headers: `Authorization Bearer + Referer + Origin + User-Agent`
+    c. Recibe el resultado de Payphone
+
+**FASE 4: REGISTRO DE VENTA**
+
+16. Si `statusCode === 3` (Aprobado):
+    a. Llama a `cartService.processCheckout(undefined, 'TARJETA', transactionId)` (POST `/api/ventas` → msvc-ventas puerto 8083)
+    b. Llama a `cartService.completarVenta(orderId)` (PUT `/api/ventas/{id}/completar`)
+    c. Limpia el carrito del cliente
+    d. Muestra pantalla de "¡Pago Exitoso!"
+17. Si `statusCode === 2` (Cancelado): Muestra "Pago Cancelado"
+18. Si error: Muestra "Error en el Pago" con mensaje descriptivo
+
+## Archivos Modificados y Creados
+
+
+| Archivo | Estado | Ruta Relativa |
+|---|---|---|
+| PaymentMethodSelector.tsx | MODIFICADO | avalon-react-10.1.0/app/(main)/checkout/components/ |
+| PayphoneForm.tsx | CREADO | avalon-react-10.1.0/app/(main)/checkout/components/ |
+| page.tsx (checkout) | MODIFICADO | avalon-react-10.1.0/app/(main)/checkout/ |
+| payphoneService.ts | CREADO | avalon-react-10.1.0/services/ |
+| route.ts (confirm) | CREADO | avalon-react-10.1.0/app/api/payphone/confirm/ |
+| page.tsx (confirmación) | CREADO | avalon-react-10.1.0/app/(main)/checkout/payphone-confirmacion/ |
+| cartService.ts | MODIFICADO | avalon-react-10.1.0/services/ |
+| next.config.js | MODIFICADO | avalon-react-10.1.0/ |
+| VentaRequestDto.java | MODIFICADO | msvc-ventas/src/.../application/dto/ |
+| PagoEntity.java | REFERENCIA | msvc-ventas/src/.../persistence/entity/ |
+| db-05-schema-ventas.sql | REFERENCIA | Raíz del proyecto |
+
+: Resumen General de Archivos
+
+
+## Código Implementado por Archivo
+
+### PaymentMethodSelector.tsx
+
+**Ruta completa:** avalon-react-10.1.0/app/(main)/checkout/components/PaymentMethodSelector.tsx
+
+**Qué se hizo:** Se agregó la opción `payphone` al tipo `PaymentMethod` y al array de opciones visuales del selector. Payphone aparece con el color naranja (`#f97316`) y el ícono `pi-mobile`.
+
+```typescript
+// Tipos de métodos de pago soportados
+export type PaymentMethod = 'transferencia' | 'tarjeta' | 'deuna' | 'payphone';
+
+// Opciones del selector visual
+const paymentOptions = [
+  {
+    value: 'transferencia' as PaymentMethod,
+    label: 'Transferencia Bancaria',
+    icon: 'pi-building',
+    description: 'Realiza una transferencia y envíanos el comprobante',
+    color: '#22c55e',
+  },
+  {
+    value: 'payphone' as PaymentMethod, // ← AGREGADO
+    label: 'Payphone',
+    icon: 'pi-mobile',
+    description: 'Paga con Payphone o tarjeta de crédito',
+    color: '#f97316', // Naranja Payphone
+  },
+  {
+    value: 'tarjeta' as PaymentMethod,
+    label: 'Tarjeta de Crédito/Débito (Stripe)',
+    icon: 'pi-credit-card',
+    description: 'Paga de forma segura con tu tarjeta',
+    color: '#3b82f6',
+  },
+  {
+    value: 'deuna' as PaymentMethod,
+    label: 'Deuna',
+    icon: 'pi-wallet',
+    description: 'Paga con Deuna de forma rápida y segura',
+    color: '#8b5cf6',
+  },
+];
+```
+
+### PayphoneForm.tsx
+
+**Ruta completa:** `avalon-react-10.1.0/app/(main)/checkout/components/PayphoneForm.tsx`
+
+**Qué se hizo:** Componente nuevo que encapsula toda la lógica de carga del SDK de Payphone y la inicialización del botón. Tiene tres fases:
+
+**Fase A — Obtención dinámica de tokens:** Al montarse, consulta el microservicio de autenticación para obtener las credenciales del emprendedor dueño de los productos en el carrito.
+
+```typescript
+useEffect(() => {
+  const fetchTokens = async () => {
+    try {
+      // Determinar el emprendedor_id (empresa.id) desde el primer item del carrito
+      const emprendedorId =
+        cartItems.length > 0 ? cartItems[0].producto?.empresa?.id : null;
+      if (emprendedorId) {
+        const apiBase =
+          process.env.NEXT_PUBLIC_AUTH_API_URL || 'http://localhost:8084';
+        // Endpoint del microservicio auth que devuelve payphoneAppId y payphoneToken
+        const res = await fetch(
+          `${apiBase}/api/emprendedor/configuracion-pagos/payphone/${emprendedorId}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.payphoneAppId && data.payphoneToken) {
+            setPayphoneAppId(data.payphoneAppId);
+            setPayphoneToken(data.payphoneToken);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Payphone] Error obteniendo tokens dinámicos:', error);
+    } finally {
+      setLoadingTokens(false);
+    }
+  };
+  fetchTokens();
+}, [cartItems]);
+```
+
+**Fase B — Carga del SDK de Payphone:** Inyecta el script del SDK en el DOM usando el `appId` obtenido. Si el script ya existe con otro `appId`, lo elimina y recarga.
+
+```typescript
+useEffect(() => {
+  if (loadingTokens) return;
+  if (!payphoneAppId) {
+    setErrorMsg('El App ID de Payphone no está configurado...');
+    return;
+  }
+  const scriptId = 'payphone-script';
+  // La URL del SDK incluye el appId como query param
+  const expectedSrc = `https://pay.payphonetodoesposible.com/api/button/js?appId=${payphoneAppId}`;
+  const existingScript = document.getElementById(scriptId) as HTMLScriptElement;
+  
+  if (existingScript && existingScript.src !== expectedSrc) {
+    // App ID diferente: eliminar script viejo
+    existingScript.remove();
+    if (window.payphone) delete (window as any).payphone;
+  }
+  
+  const script = document.createElement('script');
+  script.id = scriptId;
+  script.src = expectedSrc;
+  script.async = true;
+  script.onload = () => {
+    // Polling hasta que window.payphone.Button esté disponible
+    const checkInterval = setInterval(() => {
+      if (window.payphone && typeof window.payphone.Button === 'function') {
+        setScriptLoaded(true);
+        clearInterval(checkInterval);
+      }
+    }, 200);
+  };
+  document.body.appendChild(script);
+}, [payphoneAppId, loadingTokens]);
+```
+
+**Fase C — Inicialización del Botón:** Una vez que el SDK está listo, inicializa el botón con el desglose de montos del carrito.
+
+```typescript
+useEffect(() => {
+  if (!scriptLoaded || buttonRendered || renderAttempted.current) return;
+  const uniqueTxId = `ORD-${Date.now()}`; // ID único de transacción local
+  const getEmprendedorId = () => cartItemsRef.current[0]?.producto?.empresa?.id;
+  
+  // Desglose de importes (en centavos, como requiere Payphone)
+  const summary = cartService.getCartSummary();
+  const amountInCents = Math.round(summary.total * 100);
+  const amountWithTaxInCents = Math.round(summary.subtotal * 100);
+  const taxInCents = Math.round(summary.impuestos * 100);
+  const serviceInCents = Math.round(summary.envio * 100);
+  
+  window.payphone
+    .Button({
+      token: payphoneToken,
+      btnHorizontal: true,
+      btnCard: true,
+      createOrder: function (actions: any) {
+        return actions.prepare({
+          amount: amountInCents,
+          amountWithoutTax: 0,
+          amountWithTax: amountWithTaxInCents,
+          tax: taxInCents,
+          service: serviceInCents,
+          tip: 0,
+          currency: 'USD',
+          clientTransactionId: uniqueTxId,
+          lang: 'es',
+          // URL de respuesta que incluye el emprendedorId para la confirmación posterior
+          responseUrl: `${window.location.origin}/checkout/payphone-confirmacion?emprendedorId=${getEmprendedorId()}`,
+        });
+      },
+      onComplete: function (model: any) {
+        // Redirigir con todos los parámetros necesarios para la confirmación
+        window.location.href = `/checkout/payphone-confirmacion?id=${model.id}&clientTransactionId=${model.clientTxId}&emprendedorId=${getEmprendedorId()}`;
+      },
+      onError: function (err: any) {
+        console.error('[Payphone] Error en el pago:', err);
+      },
+    })
+    .render('#pp-button'); // El contenedor donde Payphone renderiza su botón
+  
+  setButtonRendered(true);
+}, [scriptLoaded, buttonRendered]);
+```
+
+**Render JSX del componente:**
+
+```typescript
+return (
+  <Card className="mb-4">
+    <div className="p-4 text-center">
+      <i
+        className="pi pi-mobile text-6xl mb-3"
+        style={{ color: '#f97316' }}
+      ></i>
+      <h3 className="text-xl font-semibold mb-2">Pago con Payphone</h3>
+      <p className="text-600 mb-4">
+        Selecciona tu forma de pago para continuar con la compra de forma segura.
+      </p>
+      
+      {/* Estado: Cargando SDK */}
+      {!scriptLoaded && !errorMsg && (
+        <div className="flex align-items-center justify-content-center flex-column py-3">
+          <ProgressSpinner
+            style={{ width: '35px', height: '35px' }}
+            strokeWidth="4"
+          />
+          <small className="mt-2 text-600">
+            Cargando pasarela segura de Payphone...
+          </small>
+        </div>
+      )}
+      
+      {/* Estado: Error */}
+      {errorMsg && (
+        <div
+          className="p-3 border-round text-sm"
+          style={{
+            background: '#fff3f3',
+            border: '1px solid #f5c6cb',
+            color: '#721c24',
+          }}
+        >
+          <i className="pi pi-exclamation-triangle mr-2"></i>
+          {errorMsg}
+        </div>
+      )}
+      
+      {/* Contenedor oficial del SDK — SIEMPRE debe estar en el DOM */}
+      <div
+        id="pp-button"
+        ref={buttonContainerRef}
+        className="flex justify-content-center w-full mt-2"
+        style={{ minHeight: scriptLoaded && !errorMsg ? '60px' : '0px' }}
+      ></div>
+      
+      <div className="mt-4 text-sm text-500">
+        <i className="pi pi-lock mr-1"></i>
+        Tus datos de pago están encriptados y protegidos por Payphone.
+      </div>
+    </div>
+  </Card>
+);
+```
+
+**Nota técnica importante:** El contenedor `<div id="pp-button">` debe estar siempre presente en el DOM antes de llamar a `.render('#pp-button')`. Si se renderiza condicionalmente con `{scriptLoaded && <div id="pp-button">}`, el SDK no lo encuentra.
+
+### page.tsx (checkout)
+
+**Ruta completa:** `avalon-react-10.1.0/app/(main)/checkout/page.tsx`
+
+**Qué se hizo:** Se importó `PayphoneForm` y se agregó la condición de renderizado en el paso de "Pago" del checkout. El método Payphone no activa el flujo normal de "Continuar al pago" sino que el botón de Payphone gestiona su propio flujo de pago y redirección.
+
+```typescript
+// Importación del nuevo componente
+import PayphoneForm from './components/PayphoneForm';
+
+// Dentro de renderPaymentSection():
+{!paymentProcessing && selectedPaymentMethod === 'payphone' && (
+  <PayphoneForm
+    onDataChange={(data, isValid) => {
+      setPaymentFormData(data);
+      // isValid queda en false para Payphone porque el botón de Payphone
+      // gestiona su propio flujo; no se usa el botón "Pagar $XX.XX" del checkout
+      setPaymentFormValid(isValid);
+    }}
+    primaryColor={primaryColor}
+    totalAmount={cartSummary?.total || 0}
+    clienteData={clienteData}
+    cartItems={cartSummary?.items || []}
+  />
+)}
+```
+
+### payphoneService.ts
+
+**Ruta completa:** `avalon-react-10.1.0/services/payphoneService.ts`
+
+**Qué se hizo:** Servicio TypeScript nuevo que actúa como capa de abstracción entre el frontend y la API interna de confirmación. Define las interfaces de request/response de Payphone.
+
+```typescript
+export interface PayphoneConfirmRequest {
+  id: string;
+  clientTxId: string;
+}
+
+export interface PayphoneConfirmResponse {
+  email?: string;
+  cardType?: string;
+  amount?: number;
+  statusCode?: number; // 3: Aprobado, 2: Cancelado
+  transactionStatus?: string;
+  transactionId?: number;
+  currency?: string;
+  message?: string;
+  error?: string;
+}
+
+class PayphoneService {
+  async confirmarPago(
+    data: PayphoneConfirmRequest & { emprendedorId?: string },
+  ): Promise<PayphoneConfirmResponse> {
+    console.log(
+      '[PayphoneService] Confirmando a través de nuestra API interna:',
+      data,
+    );
+    
+    // Llama a la API Route interna (no directamente a Payphone)
+    // Esto evita exponer el token del emprendedor en el navegador
+    const response = await fetch('/api/payphone/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: data.id,
+        clientTxId: data.clientTxId,
+        emprendedorId: data.emprendedorId,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(
+        errJson.error || `Error al confirmar el pago (HTTP ${response.status})`,
+      );
+    }
+    
+    return (await response.json()) as PayphoneConfirmResponse;
+  }
+}
+
+const payphoneService = new PayphoneService();
+export default payphoneService;
+```
+
+### route.ts (API Proxy Backend)
+
+**Ruta completa:** `avalon-react-10.1.0/app/api/payphone/confirm/route.ts`
+
+**Qué se hizo:** API Route de Next.js (ejecutada en el servidor, nunca en el navegador) que actúa como proxy seguro para confirmar pagos con Payphone. Este es el componente más crítico de la integración.
+
+**Función de reintentos con backoff**
+
+```typescript
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  timeoutMs = 15000,
+): Promise<Response> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      const isLastAttempt = attempt === retries;
+      if (isLastAttempt) throw err;
+      // Backoff exponencial: 2s, 4s, 6s...
+      const delay = attempt * 2000;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('Todos los reintentos agotados');
+}
+```
+
+**Handler POST principal**
+
+```typescript
+export async function POST(request: Request) {
+  const body = await request.json();
+  const { id, clientTxId, emprendedorId } = body;
+  
+  // 1. Validar parámetros mínimos
+  if (!id || !clientTxId) {
+    return NextResponse.json(
+      { error: 'Faltan parámetros requeridos' },
+      { status: 400 },
+    );
+  }
+  
+  // 2. Obtener token desde variable de entorno (fallback)
+  let token =
+    process.env.PAYPHONE_TOKEN || process.env.NEXT_PUBLIC_PAYPHONE_TOKEN;
+    
+  // 3. Obtener token dinámico desde la base de datos si hay emprendedorId válido
+  const validEmprendedorId =
+    emprendedorId && emprendedorId !== 'null' && emprendedorId !== 'undefined';
+    
+  if (validEmprendedorId) {
+    try {
+      // 127.0.0.1 en lugar de localhost evita problemas IPv6 en ciertos entornos
+      const configUrl = `http://127.0.0.1:8084/api/emprendedor/configuracion-pagos/payphone/${emprendedorId}`;
+      const configRes = await fetch(configUrl, {
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        if (configData.payphoneToken) {
+          token = configData.payphoneToken; // Token del emprendedor específico
+        }
+      }
+    } catch (dbError: any) {
+      console.error(
+        '[Payphone Confirm] Error conectando con microservicio de config:',
+        dbError.message,
+      );
+    }
+  }
+  
+  if (!token) {
+    return NextResponse.json(
+      { error: 'Token de Payphone no configurado' },
+      { status: 500 },
+    );
+  }
+  
+  // 4. Preparar body para Payphone (según documentación oficial de la Cajita)
+  const payphoneBody = {
+    id: Number(id), // DEBE ser número entero
+    clientTxId: String(clientTxId), // NOTA: Es "clientTxId" en el body (no "clientTransactionId")
+  };
+  
+  // 5. Emulación de headers de navegador para pasar los filtros de seguridad de Payphone Sandbox
+  const fullUrl = new URL(request.url);
+  const referer = fullUrl.toString();
+  const origin = fullUrl.origin;
+  
+  const response = await fetch(
+    'https://paymentbox.payphonetodoesposible.com/api/confirm',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain, */*',
+        Authorization: `Bearer ${token.trim()}`,
+        Referer: referer,
+        Origin: origin,
+        // Emular navegador para pasar filtros de Payphone Sandbox
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+      body: JSON.stringify(payphoneBody),
+    },
+  );
+  
+  // 6. Manejo especial: HTTP 200 con body vacío = Pago aprobado por app Payphone
+  const responseText = await response.text();
+  if (!responseText || responseText.trim() === '') {
+    return NextResponse.json({
+      statusCode: 3,
+      transactionStatus: 'Approved',
+      message: 'Pago confirmado correctamente',
+    });
+  }
+  
+  // 7. Parsear respuesta JSON normal
+  const data = JSON.parse(responseText);
+  return NextResponse.json(data);
+}
+```
+
+**Detalle crítico:** El endpoint de la Cajita de Pagos usa el subdominio `paymentbox` (NO `api`). URL correcta: `https://paymentbox.payphonetodoesposible.com/api/confirm`
+
+### payphone-confirmacion/page.tsx
+
+**Ruta completa:** avalon-react-10.1.0/app/(main)/checkout/payphone-confirmacion/page.tsx
+
+**Qué se hizo:** Página nueva a la que Payphone redirige después del pago. Captura los parámetros de la URL, confirma el pago, registra la venta y muestra el resultado.
+
+```typescript
+function PayphoneConfirmationContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const confirmAttempted = useRef(false); // Evita doble ejecución en React StrictMode
+  
+  useEffect(() => {
+    const id = searchParams.get('id');
+    const clientTxId = searchParams.get('clientTransactionId');
+    let emprendedorId = searchParams.get('emprendedorId')?.split('?')[0]; // Limpiar parámetros concatenados
+    
+    // FALLBACK: Si el emprendedorId no viene en la URL, recuperarlo del carrito en localStorage
+    if (!emprendedorId) {
+      const summary = cartService.getCartSummary();
+      if (summary.items.length > 0) {
+        emprendedorId = summary.items[0].producto.empresa?.id?.toString();
+      }
+    }
+    
+    if (!id || !clientTxId) {
+      setErrorMessage('Faltan parámetros de transacción en la URL.');
+      setLoading(false);
+      return;
+    }
+    
+    if (confirmAttempted.current) return;
+    confirmAttempted.current = true;
+    
+    const confirmar = async () => {
+      // Paso 1: Confirmar el pago con Payphone (a través de la API Route interna)
+      const result = await payphoneService.confirmarPago({ id, clientTxId, emprendedorId });
+      setPaymentDetails(result);
+      
+      if (result.statusCode === 3) {
+        setStatus('success');
+        
+        // Paso 2: Registrar la venta en el backend
+        // Se usa método TARJETA porque Payphone es una pasarela de tarjeta
+        const checkoutRes = await cartService.processCheckout(undefined, 'TARJETA', result.transactionId);
+        
+        if (checkoutRes.success && checkoutRes.data?.ventaId) {
+          // Paso 3: Completar la venta para actualizar stock y estado
+          await cartService.completarVenta(checkoutRes.data.orderId);
+        }
+        
+        // Paso 4: Limpiar el carrito del cliente
+        cartService.clearCart();
+        
+      } else if (result.statusCode === 2) {
+        setStatus('cancelled');
+      } else {
+        setStatus('error');
+      }
+    };
+    confirmar();
+  }, [searchParams]);
+  
+  // ...JSX de estados: loading, success, cancelled, error
+}
+
+// Envuelto en Suspense por usar useSearchParams() con Next.js 13+
+export default function PayphoneConfirmationPage() {
+  return (
+    <Suspense fallback={<ProgressSpinner />}>
+      <PayphoneConfirmationContent />
+    </Suspense>
+  );
+}
+```
+
+| Estado | Ícono | Color | Descripción |
+|---|---|---|---|
+| loading | ProgressSpinner | Color primario | Verificando la transacción con Payphone |
+| success | pi-check-circle | Verde (#10b981) | Pago exitoso, muestra ID de transacción y monto |
+| cancelled | pi-info-circle | Amarillo (#f59e0b) | Pago cancelado, sin cargos |
+| error | pi-times-circle | Rojo (#ef4444) | Error en verificación, con mensaje descriptivo |
+
+: Estados visuales de la página
+
+### cartService.ts
+
+**Ruta completa:** `avalon-react-10.1.0/services/cartService.ts`
+
+**Qué se hizo:** Se modificó el método `processCheckout` para aceptar el `transactionId` de Payphone como parámetro de comprobante. Esto permite que el número de transacción de Payphone quede registrado en la venta como referencia.
+
+```typescript
+// ANTES (signatura original):
+async processCheckout(
+  datosCliente?: any,
+  metodoPago?: 'TRANSFERENCIA' | 'TARJETA' | 'DEUNA',
+  comprobanteUrl?: string
+): Promise<CheckoutResult>
+
+// El tercer parámetro comprobanteUrl ahora también acepta el transactionId de Payphone
+// Uso desde payphone-confirmacion/page.tsx:
+const checkoutRes = await cartService.processCheckout(
+  undefined,          // datosCliente: se lee desde clientesService.obtenerDatosClienteLocal()
+  'TARJETA',          // metodoPago: Payphone usa tarjeta como método
+  result.transactionId // comprobanteUrl: en este caso es el ID de transacción de Payphone
+);
+```
+
+También se lee el `emprendedorId` desde el carrito para asociar la venta correctamente:
+
+```typescript
+// Dentro de processCheckout():
+const emprendedorId = cart[0].producto.empresa?.id || 1; // Del primer producto del carrito
+
+const checkoutData = {
+  clienteId: clienteId,
+  emprendedorId: emprendedorId, // ← Clave para asociar la venta al emprendedor correcto
+  items: cart.map((item) => ({
+    productoId: item.producto.id,
+    cantidad: item.cantidad,
+    nombreProducto: item.producto.nombre,
+    precioUnitario: item.producto.precio,
+  })),
+  metodoPago: metodoPago,
+  comprobanteUrl: comprobanteUrl,
+};
+
+// POST a msvc-ventas
+const response = await fetch(`${this.API_BASE_URL}/api/ventas`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('token')}`,
+  },
+  body: JSON.stringify(checkoutData),
+  signal: controller.signal,
+});
+```
+
+### next.config.js
+
+**Ruta completa:** `avalon-react-10.1.0/next.config.js`
+
+**Qué se hizo:** Se configuró el proxy reverso hacia el microservicio de autenticación (puerto 8084) para que las llamadas a `/api/proxy/auth/*` se redirijan correctamente. Esta ruta ya existía pero se verificó que cubra el endpoint de configuración de Payphone.
+
+```javascript
+async rewrites() {
+  return [
+    // ... otras rutas de proxy ...
+    {
+      // Proxy hacia msvc-auth que gestiona credenciales de Payphone
+      source: '/api/proxy/auth/:path*',
+      destination: 'http://localhost:8084/:path*'
+    }
+  ];
+},
+```
+
+También se verificó que `reactStrictMode: false` esté configurado para evitar el doble montaje de componentes, que causaría que el SDK de Payphone se inicialice dos veces:
+
+```javascript
+reactStrictMode: false, // Evita doble renderizado que causa conflictos con el SDK de Payphone
+```
+
+### VentaRequestDto.java
+
+**Ruta completa:** msvc-ventas/src/main/java/com/example/msvc_ventas/application/dto/VentaRequestDto.java
+
+**Qué se hizo:** Se verificó que el DTO ya incluía el campo `emprendedorId`, requerido para asociar la venta al emprendedor correcto cuando se procesa un pago de Payphone.
+
+```java
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class VentaRequestDto {
+
+  @NotNull(message = "El ID del cliente es obligatorio")
+  private Long clienteId;
+
+  @NotEmpty(message = "Los items de la venta no pueden estar vacíos")
+  @Valid
+  private List<VentaItemRequestDto> items;
+
+  @NotNull(message = "El método de pago es obligatorio")
+  private String metodoPago; // TRANSFERENCIA, TARJETA, DEUNA
+
+  private String comprobanteUrl; // Opcional — para Payphone almacena el transactionId
+
+  private Long emprendedorId; // ID del emprendedor dueño de los productos
+}
+```
+
+### PagoEntity.java
+
+**Ruta completa:** msvc-ventas/src/main/java/com/example/msvc_ventas/infrastructure/persistence/entity/PagoEntity.java
+
+**Referencia:** Esta entidad no requirió modificaciones. Payphone usa el método `TARJETA` que ya estaba definido en el enum `MetodoPago`.
+
+```java
+public enum MetodoPago {
+  TRANSFERENCIA,
+  TARJETA, // ← Payphone usa este método
+  DEUNA
+}
+
+public enum EstadoPago {
+  PENDIENTE,
+  PROCESANDO,
+  APROBADO, // ← Estado final tras confirmación exitosa de Payphone
+  RECHAZADO
+}
+```
+
+## Base de Datos
+
+Tabla `ventas` — Campos relevantes para Payphone
+
+```sql
+CREATE TABLE IF NOT EXISTS ventas (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  numero_factura VARCHAR(20) NOT NULL UNIQUE,
+  cliente_id BIGINT NOT NULL,
+  emprendedor_id BIGINT NOT NULL, -- ID del emprendedor, obtenido del carrito
+  subtotal DECIMAL(10,2) NOT NULL,
+  impuesto DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total DECIMAL(10,2) NOT NULL,
+  estado ENUM('PENDIENTE', 'COMPLETADA', 'CANCELADA') DEFAULT 'PENDIENTE',
+  metodo_pago ENUM('TRANSFERENCIA', 'TARJETA', 'DEUNA'), -- Payphone usa 'TARJETA'
+  estado_pago ENUM('PENDIENTE', 'PROCESANDO', 'APROBADO', 'RECHAZADO') DEFAULT 'PENDIENTE',
+  referencia_transaccion VARCHAR(255), -- Almacena el transactionId de Payphone
+  fecha_pago TIMESTAMP NULL,
+  ...
+) ENGINE=InnoDB;
+```
+
+Tabla `pagos` — Registro del pago
+
+```sql
+CREATE TABLE IF NOT EXISTS pagos (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  venta_id BIGINT NOT NULL,
+  metodo_pago ENUM('TRANSFERENCIA', 'TARJETA', 'DEUNA') NOT NULL, -- 'TARJETA' para Payphone
+  estado_pago ENUM('PENDIENTE', 'PROCESANDO', 'APROBADO', 'RECHAZADO') DEFAULT 'PENDIENTE',
+  referencia_transaccion VARCHAR(255), -- transactionId de Payphone
+  monto DECIMAL(10,2) NOT NULL,
+  fecha_pago TIMESTAMP NULL,
+  ...
+) ENGINE=InnoDB;
+```
+
+## Variables de Entorno
+
+**Archivo:** `avalon-react-10.1.0/.env.local`
+
+```properties
+# URL del microservicio de autenticación (donde se almacenan las credenciales de Payphone)
+NEXT_PUBLIC_AUTH_API_URL=/api/proxy/auth
+
+# Fallback de token de Payphone (opcional, para pruebas sin microservicio)
+# PAYPHONE_TOKEN=tu_token_aqui
+# NEXT_PUBLIC_PAYPHONE_TOKEN=tu_token_aqui
+
+# URLs de los demás microservicios
+NEXT_PUBLIC_API_URL=/api/proxy/ventas/api
+NEXT_PUBLIC_VENTAS_API_URL=/api/proxy/ventas
+NEXT_PUBLIC_PRODUCTOS_API_URL=/api/proxy/productos
+NEXT_PUBLIC_INVENTARIO_API_URL=/api/proxy/inventarios
+```
+
+**Configuración de Credenciales en la BD**
+
+Los tokens de Payphone se almacenan en la tabla `configuracion_metodos_pago` del servicio de autenticación (msvc-auth, puerto 8084). El endpoint para obtenerlos es:
+
+
+http
+GET http://localhost:8084/api/emprendedor/configuracion-pagos/payphone/{emprendedorId}
+
+
+```typescript
+Respuesta:
+{
+  "payphoneAppId": "APP_ID_DEL_EMPRENDEDOR",
+  "payphoneToken": "TOKEN_BEARER_DEL_EMPRENDEDOR"
+}
+```
+
+
+## Problemas Resueltos
+
+**Problema 1: Error 500 al confirmar (Runtime Error)**
+
+**Causa:** Se usaba el endpoint incorrecto `api.payphonetodoesposible.com` en lugar del endpoint de la Cajita.
+
+**Solución:** Cambiar al endpoint oficial de la Cajita de Pagos y usar el parámetro correcto:
+
+```typescript
+// ❌ INCORRECTO (API general)
+fetch('https://api.payphonetodoesposible.com/api/button/payment');
+
+// ✅ CORRECTO (Cajita de Pagos)
+fetch('https://paymentbox.payphonetodoesposible.com/api/confirm', {
+  body: JSON.stringify({
+    id: Number(id), // DEBE ser número
+    clientTxId: clientTxId, // NOTA: "clientTxId" en el body, NO "clientTransactionId"
+  }),
+});
+```
+
+**Problema 2: Error 502 Bad Gateway**
+
+**Causa:** Payphone Sandbox rechazaba peticiones de servidor sin cabeceras de navegador.
+
+**Solución:** Emular headers de navegador en la API Route del servidor:
+
+```typescript
+headers: {
+  "Authorization": `Bearer ${token}`,
+  "Referer": referer, // URL completa del origen de la petición
+  "Origin": origin, // Dominio de la aplicación
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..." // Emular Chrome
+}
+```
+
+**Problema 3: Ventas vacías (sin emprendedorId)**
+
+**Causa:** El `emprendedorId` no se pasaba correctamente desde el carrito hasta la creación de la venta.
+
+**Solución:** Leer el `emprendedorId` desde `cartItems[0].producto.empresa.id` en `PayphoneForm.tsx` y pasarlo en la URL de respuesta y en el callback `onComplete`:
+
+```typescript
+const getEmprendedorId = () => cartItemsRef.current[0]?.producto?.empresa?.id;
+
+// En responseUrl y onComplete:
+window.location.href = `/checkout/payphone-confirmacion?id=${model.id}&clientTransactionId=${model.clientTxId}&emprendedorId=${getEmprendedorId()}`;
+```
+
+**Problema 4: JWT inválido tras reinicio del servidor**
+
+**Causa:** El servicio de autenticación usaba claves RSA generadas aleatoriamente en cada inicio, invalidando las sesiones anteriores.
+
+**Solución:** Cambiar a firma HMAC-SHA256 con clave fija en el microservicio de autenticación, permitiendo que las sesiones sobrevivan a reinicios del servidor.
+
+**Problema 5: Doble confirmación en React StrictMode**
+
+**Causa:** React StrictMode monta y desmonta los efectos dos veces en desarrollo, causando doble llamada a la API de confirmación.
+
+**Solución:** Usar un `useRef` como bandera:
+
+```typescript
+const confirmAttempted = useRef(false);
+
+// En el useEffect:
+if (confirmAttempted.current) return;
+confirmAttempted.current = true;
+// ... hacer la confirmación
+```
+
+**Problema 6: window.payphone.Button no disponible inmediatamente**
+
+**Causa:** El script de Payphone carga pero el objeto `window.payphone` se inicializa de forma asíncrona.
+
+**Solución:** Usar polling con `setInterval` después de `script.onload`:
+
+```typescript
+script.onload = () => {
+  let attempts = 0;
+  const checkInterval = setInterval(() => {
+    attempts++;
+    if (window.payphone && typeof window.payphone.Button === 'function') {
+      setScriptLoaded(true);
+      clearInterval(checkInterval);
+    } else if (attempts > 20) {
+      // Timeout: 4 segundos
+      setErrorMsg('Error al inicializar el SDK de Payphone');
+      clearInterval(checkInterval);
+    }
+  }, 200);
+};
+```
+
+## API Reference de Payphone
+
+**Recursos del SDK (Cajita de Pagos v2.0)**
+
+```html
+<!-- CSS del botón -->
+<link
+  rel="stylesheet"
+  href="https://cdn.payphonetodoesposible.com/box/v2.0/payphone-payment-box.css"
+/>
+
+<!-- Script del SDK (personalizado con appId) -->
+<script src="https://pay.payphonetodoesposible.com/api/button/js?appId={APP_ID}">
+</script>
+```
+
+**Inicialización del Botón**
+
+```javascript
+window.payphone
+  .Button({
+    token: 'BEARER_TOKEN', // Token del emprendedor
+    btnHorizontal: true, // Layout del botón
+    btnCard: true, // Mostrar opción de tarjeta
+    createOrder: function (actions) {
+      return actions.prepare({
+        amount: 10000, // Total en centavos ($100.00)
+        amountWithoutTax: 0,
+        amountWithTax: 8696, // Base imponible
+        tax: 1304, // IVA (15%)
+        service: 0, // Costo de envío
+        tip: 0,
+        currency: 'USD',
+        clientTransactionId: 'ORD-UNIQUE-ID',
+        lang: 'es',
+        responseUrl: 
+          'https://tudominio.com/checkout/' + 
+          'payphone-confirmacion?emprendedorId=1',
+      });
+    },
+    onComplete: function (model) {
+      // model.id → ID de transacción de Payphone
+      // model.clientTxId → Tu clientTransactionId
+    },
+    onError: function (err) {
+      /* manejo de error */
+    },
+  })
+  .render('#pp-button');
+```
+
+**Confirmación de Pago (Endpoint Cajita)**
+
+```http
+POST https://paymentbox.payphonetodoesposible.com/api/confirm
+Authorization: Bearer {TOKEN}
+Content-Type: application/json
+
+{
+  "id": 86000000, // Número entero (NO string)
+  "clientTxId": "ORD-123" // (NO "clientTransactionId")
+}
+```
+
+**Códigos de Respuesta**
+
+| statusCode | transactionStatus | Significado |
+|---|---|---|
+| 3 | Approved | Pago aprobado exitosamente |
+| 2 | Canceled | Pago cancelado por el usuario |
+| 1 | Pending | Pago pendiente (poco frecuente) |
+| null | — | Error en la transacción |
+
+: Códigos de Respuesta
+
+**Parámetros de la URL de Respuesta**
+Payphone redirige a `responseUrl` con estos query params:
+
+| Parámetro | Descripción |
+|---|---|
+| id | ID de la transacción en Payphone (número entero) |
+| clientTransactionId | Tu clientTransactionId original |
+
+: Parámetros de la URL de Respuesta
+
+Nota: Los parámetros adicionales como `emprendedorId` que se incluyen en la `responseUrl` son preservados por Payphone en la redirección.

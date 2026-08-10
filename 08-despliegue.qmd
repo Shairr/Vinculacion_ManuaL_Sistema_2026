@@ -1,0 +1,772 @@
+# Sección Despliegue Local
+
+Instrucciones para la puesta en marcha del sistema en entorno de desarrollo.
+
+\begin{importantbox}
+\textbf{Importante:} Se requiere estrictamente Java 17 LTS. Inicie Eureka Server siempre primero. PostgreSQL debe correr en el puerto 5433. Cuide los nombres de bases de datos exactos ("auth-service" con comillas) y no exponga contraseñas en repositorios.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} El entorno replica la infraestructura de producción con puertos independientes, usa Node 18+ para Next.js 13 y JPA con update automático. Emplear perfiles de ejecución del IDE acelera el inicio, y los SQL dumps proveen datos base listos.
+\end{infobox}
+
+## Prerrequisitos
+
+- Java Development Kit (JDK): Versión 17.
+- Maven: Versión 3.8+.
+- Node.js: Versión 18+ (LTS).
+- PostgreSQL: Versión 14+ corriendo en el puerto 5433.
+
+## Configuración de Base de Datos
+
+Inicializar las 4 bases de datos requeridas en el servicio PostgreSQL (Puerto 5433).
+
+```sql
+CREATE DATABASE "auth-service";
+CREATE DATABASE "productos";
+CREATE DATABASE "inventario";
+CREATE DATABASE "ventas";
+```
+
+## Configuración Backend
+
+Todos los microservicios utilizan `src/main/resources/application.properties`.
+Configuración Base:
+
+```properties
+server.port={PUERTO_SERVICIO}
+spring.datasource.url=jdbc:postgresql://localhost:5433/{NOMBRE_DB}
+spring.datasource.username=postgres
+spring.datasource.password={PASSWORD_LOCAL}
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+```
+
+| Microservicio | Puerto | Base de Datos |
+|:---|:---|:---|
+| `msvc-eureka` | 8761 | N/A |
+| `msvc-auth` | 8080 | `auth-service` |
+| `msvc-producto` | 8081 | `productos` |
+| `msvc-inventario` | 8082 | `inventario` |
+| `msvc-ventas` | 8083 | `ventas` |
+
+: Configuración de Puertos y Bases de Datos
+
+## Ejecución Backend
+
+Orden estricto de inicio:
+
+1.  Service Discovery (Eureka):
+    ```bash
+    cd msvc-eureka
+    mvn spring-boot:run
+    ```
+    *Esperar a que inicie en puerto 8761.*
+
+2.  Microservicios Funcionales (En terminales separadas):
+    ```bash
+    cd msvc-auth && mvn spring-boot:run
+    cd msvc-producto && mvn spring-boot:run
+    cd msvc-inventario && mvn spring-boot:run
+    cd msvc-ventas && mvn spring-boot:run
+    ```
+
+## Ejecución Frontend
+
+Directorio: `avalon-react-10.1.0/`
+
+1.  Instalar dependencias:
+    ```bash
+    npm install
+    ```
+
+2.  Iniciar servidor de desarrollo:
+    ```bash
+    npm run dev
+    ```
+    Accesible en: `http://localhost:3000`
+
+## Verificación
+
+- Eureka Dashboard: `http://localhost:8761`
+- Swagger Auth: `http://localhost:8080/swagger-ui.html`
+- Frontend: `http://localhost:3000`
+
+### Product Service (msvc-producto)
+
+```properties
+spring.application.name=msvc-producto
+server.port=8081
+
+# Base de datos productos
+spring.datasource.url=jdbc:postgresql://localhost:5433/productos
+spring.datasource.username=postgres
+spring.datasource.password=Danipa.14
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# Eureka
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+
+# Feign Client: Comunicación con msvc-inventario
+# URL: http://msvc-inventario/api/inventarios (resuelto por Eureka)
+```
+
+### Inventory Service (msvc-inventario)
+
+```properties
+spring.application.name=msvc-inventario
+server.port=8082
+
+# Base de datos inventario
+spring.datasource.url=jdbc:postgresql://localhost:5433/inventario
+spring.datasource.username=postgres
+spring.datasource.password=Danipa.14
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# Eureka
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+
+# Feign Client: Comunicación con msvc-producto
+# URL: http://msvc-producto/api/productos (resuelto por Eureka)
+```
+
+### Sales Service (msvc-ventas)
+
+```properties
+spring.application.name=msvc-ventas
+server.port=8083
+
+# Base de datos ventas
+spring.datasource.url=jdbc:postgresql://localhost:5433/ventas
+spring.datasource.username=postgres
+spring.datasource.password=Danipa.14
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# Eureka
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+
+# Feign Clients: Comunicación con msvc-producto y msvc-inventario
+# URL: http://msvc-producto/api/productos (resuelto por Eureka)
+# URL: http://msvc-inventario/api/inventarios (resuelto por Eureka)
+```
+
+### Frontend (avalon-react-10.1.0)
+
+El frontend utiliza las siguientes URLs para comunicarse con los microservicios:
+
+```javascript
+// src/service/*.ts
+const AUTH_API = 'http://localhost:8080/api/auth'
+const PRODUCTOS_API = 'http://localhost:8081/api/productos'
+const CATEGORIAS_API = 'http://localhost:8081/api/categorias'
+const EMPRESAS_API = 'http://localhost:8081/api/empresas'
+const INVENTARIOS_API = 'http://localhost:8082/api/inventarios'
+const VENTAS_API = 'http://localhost:8083/api/ventas'
+const CLIENTES_API = 'http://localhost:8083/api/clientes'
+```
+
+Nota: Las URLs están hardcodeadas en los archivos de servicio, no se requiere configuración adicional.
+
+## Instalación de PostgreSQL
+
+### En Windows
+
+1. Descargar instalador desde [postgresql.org/download/windows](https://www.postgresql.org/download/windows/)
+2. Ejecutar instalador
+3. Configurar contraseña del usuario `postgres`
+4. IMPORTANTE: Durante instalación configurar puerto 5433 (no el puerto por defecto 5432)
+5. Verificar instalación:
+
+```powershell
+# Verificar versión
+psql --version
+
+# Acceder a PostgreSQL (usar el puerto correcto)
+psql -U postgres -p 5433
+```
+
+### En Linux (Ubuntu/Debian)
+
+```bash
+# Actualizar repositorios
+sudo apt update
+
+# Instalar PostgreSQL
+sudo apt install postgresql postgresql-contrib
+
+# Iniciar servicio
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Verificar instalación
+sudo systemctl status postgresql
+
+# Acceder a PostgreSQL
+sudo -u postgres psql
+```
+
+
+## Creación de Bases de Datos
+
+### Opción 1: Con psql (Recomendado)
+
+```bash
+# Conectarse a PostgreSQL (puerto 5433)
+psql -U postgres -p 5433
+
+# Crear las 4 bases de datos del sistema
+CREATE DATABASE "auth-service";
+CREATE DATABASE productos;
+CREATE DATABASE inventario;
+CREATE DATABASE ventas;
+
+# Verificar creación
+\l
+
+# Salir
+\q
+```
+
+### Opción 2: Con pgAdmin
+
+1. Abrir pgAdmin
+2. Conectar al servidor PostgreSQL (puerto 5433)
+3. Click derecho en "Databases" → "Create" → "Database"
+4. Crear las 4 bases de datos:
+   - `auth-service` (con comillas por el guion)
+   - `productos`
+   - `inventario`
+   - `ventas`
+
+Nota: El sistema utiliza JPA con `hibernate.ddl-auto=update`, por lo que las tablas se crean automáticamente al iniciar cada microservicio por primera vez.
+
+## Procedimiento de Despliegue Local
+
+Instrucciones oficiales paso a paso.
+
+### Arquitectura de Puertos
+
+| Servicio | Puerto | URL Base |
+|:---|:---|:---|
+| PostgreSQL | 5433 | localhost:5433 |
+| Eureka Server | 8761 | http://localhost:8761 |
+| msvc-auth (login) | 8080 | http://localhost:8080 |
+| msvc-producto | 8081 | http://localhost:8081 |
+| msvc-inventario | 8082 | http://localhost:8082 |
+| msvc-ventas | 8083 | http://localhost:8083 |
+| Frontend (Next.js) | 3000 | http://localhost:3000 |
+
+: Mapeo Completo de Puertos y URLs
+
+### Paso 1: Importar Bases de Datos (Opcional)
+
+IMPORTANTE: El proyecto incluye 4 archivos SQL con datos iniciales en la raíz del repositorio:
+- `auth-service` - Usuarios y roles iniciales (13 usuarios de ejemplo)
+- `productos` - Categorías (7), empresas (8) y productos (43) de ejemplo
+- `inventario` - 31 inventarios y 40 movimientos
+- `ventas` - 30 clientes, 23 ventas con 43 detalles
+
+```bash
+# Importar los dumps SQL en PostgreSQL (puerto 5433)
+psql -U postgres -p 5433 -d auth-service < auth-service
+psql -U postgres -p 5433 -d productos < productos
+psql -U postgres -p 5433 -d inventario < inventario
+psql -U postgres -p 5433 -d ventas < ventas
+```
+
+Alternativa: Si no importas los dumps, las bases de datos se crearán vacías. Deberás:
+1. Registrarte como primer usuario
+2. Agregar categorías manualmente
+3. Agregar empresas manualmente
+4. Crear productos
+
+### Paso 2: Iniciar Eureka Server
+
+El servidor de descubrimiento de servicios DEBE iniciarse primero:
+
+```bash
+# Navegar al proyecto Eureka
+cd Microservicios/eureka-server
+
+# Iniciar con Maven
+mvn spring-boot:run
+```
+
+Verificación: 
+- Abrir http://localhost:8761
+- Debe mostrar dashboard de Eureka con mensaje "No instances available"
+- Esperar mensaje en consola: `Started EurekaServerApplication in X seconds`
+
+### Paso 3: Iniciar Microservicios Backend
+
+Una vez Eureka esté corriendo, iniciar los 4 microservicios. IMPORTANTE: Abrir una terminal separada para cada servicio.
+
+#### Terminal 2: msvc-auth (login)
+
+```bash
+cd Microservicios/demo
+mvn spring-boot:run
+```
+
+Esperar mensaje: `Started DemoApplication in X seconds`
+
+#### Terminal 3: msvc-producto
+
+```bash
+cd Microservicios/msvc-producto
+mvn spring-boot:run
+```
+
+Esperar mensaje: `Started MsvcProductoApplication in X seconds`
+
+#### Terminal 4: msvc-inventario
+
+```bash
+cd Microservicios/msvc-inventario
+mvn spring-boot:run
+```
+
+Esperar mensaje: `Started MsvcInventarioApplication in X seconds`
+
+#### Terminal 5: msvc-ventas
+
+```bash
+cd Microservicios/msvc-ventas
+mvn spring-boot:run
+```
+
+Esperar mensaje: `Started MsvcVentasApplication in X seconds`
+
+### Paso 4: Verificar Registro en Eureka
+
+MUY IMPORTANTE: Esperar 30-60 segundos después de iniciar cada servicio para que se registre en Eureka.
+
+1. Abrir http://localhost:8761
+2. Verificar que los 4 microservicios aparezcan en la sección "Instances currently registered with Eureka":
+
+✅ Servicios esperados:
+- `LOGIN` (msvc-auth en puerto 8080)
+- `MSVC-PRODUCTO` (puerto 8081)
+- `MSVC-INVENTARIO` (puerto 8082)
+- `MSVC-VENTAS` (puerto 8083)
+
+Estado esperado: Cada servicio debe mostrar estado `UP` con su IP y puerto.
+
+### Paso 5: Instalar Dependencias del Frontend
+
+```bash
+# Navegar al proyecto frontend
+cd avalon-react-10.1.0
+
+# Instalar dependencias con npm
+npm install
+```
+
+Nota: Este paso solo se ejecuta una vez. Toma 2-5 minutos dependiendo de la velocidad de internet.
+
+### Paso 6: Iniciar Frontend
+
+```bash
+# En el mismo directorio avalon-react-10.1.0
+npm run dev
+```
+
+Verificación:
+- Esperar mensaje: `ready - started server on 0.0.0.0:3000`
+- Abrir navegador en: http://localhost:3000
+- Debe cargar la interfaz del sistema
+
+### Paso 7: Verificación Final del Sistema
+
+✅ Todo debe funcionar correctamente. Verificar:
+
+#### 1. Dashboard de Eureka
+- URL: http://localhost:8761
+- Esperado: 4 servicios registrados con estado UP
+
+#### 2. Swagger UI (Documentación APIs)
+- Auth: http://localhost:8080/swagger-ui.html
+- Producto: http://localhost:8081/swagger-ui.html
+- Inventario: http://localhost:8082/swagger-ui.html
+- Ventas: http://localhost:8083/swagger-ui.html
+
+#### 3. Health Checks
+```bash
+# Verificar que cada servicio responda
+curl http://localhost:8080/actuator/health
+curl http://localhost:8081/actuator/health
+curl http://localhost:8082/actuator/health
+curl http://localhost:8083/actuator/health
+```
+
+Respuesta esperada: `{"status":"UP"}`
+
+#### 4. Frontend
+- URL: http://localhost:3000
+- Esperado: Interfaz cargando correctamente
+- Página de login visible
+- Sin errores en consola del navegador (F12)
+
+### Paso 8: Probar el Sistema
+
+#### Opción A: Con Datos Importados
+
+Si importaste los dumps SQL:
+
+```
+Usuario: admin
+Contraseña: admin
+```
+
+Otros usuarios de prueba (verificar en tabla `usuarios`):
+- `usuario1` / (verificar contraseña hasheada)
+- `Daniel` / (verificar contraseña hasheada)
+
+#### Opción B: Sin Datos Importados
+
+1. Hacer clic en "Registrarse" en el frontend
+2. Completar formulario de registro
+3. Login con las credenciales creadas
+4. Navegar por el sistema (estará vacío, crear categorías/productos manualmente)
+
+## Troubleshooting - Problemas Comunes
+
+### Problema: Eureka Server no muestra servicios
+
+Síntomas:
+- Dashboard de Eureka vacío
+- Mensaje "No instances available"
+
+Soluciones:
+1. Esperar 30-60 segundos después de iniciar cada servicio
+   - Los servicios se registran automáticamente pero toma tiempo
+   - Revisar logs del servicio para mensaje "Registered with Eureka"
+
+2. Verificar que Eureka esté corriendo:
+   ```bash
+   # Verificar puerto 8761 ocupado
+   netstat -ano | findstr :8761   # Windows
+   lsof -i :8761                   # Linux/macOS
+   ```
+
+3. Revisar configuración `eureka.client.service-url.defaultZone` en `application.properties`:
+   ```properties
+   eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+   ```
+
+### Problema: Frontend no conecta con backend
+
+Síntomas:
+- Errores 404 en consola del navegador
+- "Network Error" al intentar login
+- Peticiones CORS bloqueadas
+
+Soluciones:
+1. Verificar que todos los microservicios estén en estado UP en Eureka:
+   - http://localhost:8761
+   - Deben aparecer 4 servicios
+
+2. Revisar consola del navegador (F12):
+   ```javascript
+   // Buscar errores tipo:
+   // "Failed to fetch"
+   // "CORS policy"
+   // "ERR_CONNECTION_REFUSED"
+   ```
+
+3. Verificar que los puertos estén correctos:
+   ```bash
+   # Verificar puertos ocupados
+   netstat -ano | findstr :8080   # msvc-auth
+   netstat -ano | findstr :8081   # msvc-producto
+   netstat -ano | findstr :8082   # msvc-inventario
+   netstat -ano | findstr :8083   # msvc-ventas
+   netstat -ano | findstr :3000   # frontend
+   ```
+
+4. Probar endpoints directamente:
+   ```bash
+   # Test login
+   curl -X POST http://localhost:8080/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"admin","password":"admin"}'
+   
+   # Test productos
+   curl http://localhost:8081/api/productos
+   ```
+
+### Problema: Error de conexión a base de datos
+
+Síntomas:
+- `PSQLException: Connection refused`
+- `Unable to acquire JDBC Connection`
+- Microservicio no inicia
+
+Soluciones:
+1. Verificar que PostgreSQL esté corriendo:
+   ```bash
+   # Windows (Services)
+   services.msc   # Buscar "postgresql-x64-14"
+   
+   # Linux
+   sudo systemctl status postgresql
+   
+   # macOS
+   brew services list | grep postgresql
+   ```
+
+2. Verificar puerto correcto (5433 no 5432):
+   ```bash
+   psql -U postgres -p 5433
+   ```
+
+3. Verificar credenciales en `application.properties`:
+   ```properties
+   spring.datasource.url=jdbc:postgresql://localhost:5433/productos
+   spring.datasource.username=postgres
+   spring.datasource.password=Danipa.14
+   ```
+
+4. Probar conexión manual:
+   ```bash
+   # Probar conexión a cada BD
+   psql -U postgres -p 5433 -d auth-service
+   psql -U postgres -p 5433 -d productos
+   psql -U postgres -p 5433 -d inventario
+   psql -U postgres -p 5433 -d ventas
+   ```
+
+5. Verificar firewall (si aplica):
+   ```bash
+   # Windows: Verificar regla para PostgreSQL en puerto 5433
+   # Linux: sudo ufw allow 5433
+   ```
+
+### Problema: Puerto ya en uso
+
+Síntomas:
+- `Address already in use: bind`
+- `Port 8080 is already in use`
+- Servicio no inicia
+
+Soluciones:
+1. Identificar proceso usando el puerto:
+   ```bash
+   # Windows
+   netstat -ano | findstr :8080
+   # Anotar PID (última columna)
+   
+   # Linux/macOS
+   lsof -i :8080
+   ```
+
+2. Terminar proceso anterior:
+   ```bash
+   # Windows
+   taskkill /PID [número] /F
+   
+   # Linux/macOS
+   kill -9 [PID]
+   ```
+
+3. Alternativamente, cambiar puerto en `application.properties`:
+   ```properties
+   server.port=8090  # Usar puerto diferente
+   ```
+
+### Problema: Error 401 Unauthorized
+
+Síntomas:
+- Respuesta HTTP 401 al acceder a endpoints protegidos
+- "Unauthorized" en frontend
+
+Soluciones:
+1. Verificar token JWT no expirado:
+   - Los tokens expiran en 1 hora por defecto
+   - Hacer login nuevamente
+
+2. Verificar header Authorization:
+   ```bash
+   # Ejemplo correcto
+   curl http://localhost:8081/api/productos \
+     -H "Authorization: Bearer eyJhbGciOiJSUzI1..."
+   ```
+
+3. Revisar configuración de seguridad en `SecurityConfig.java`:
+   - Verificar endpoints públicos vs protegidos
+   - Verificar configuración CORS
+
+### Problema: Dependencias Maven no se descargan
+
+Síntomas:
+- `Could not resolve dependencies`
+- `Failed to read artifact descriptor`
+- Compilación falla
+
+Soluciones:
+1. Limpiar cache de Maven:
+   ```bash
+   mvn clean
+   mvn dependency:purge-local-repository
+   ```
+
+2. Eliminar carpeta `.m2/repository`:
+   ```bash
+   # Windows
+   rmdir /s /q C:\Users\[usuario]\.m2\repository
+   
+   # Linux/macOS
+   rm -rf ~/.m2/repository
+   ```
+
+3. Descargar nuevamente:
+   ```bash
+   mvn clean install
+   ```
+
+4. Verificar conexión a internet:
+   ```bash
+   ping repo.maven.apache.org
+   ```
+
+### Problema: npm install falla en frontend
+
+Síntomas:
+- `ENOENT: no such file or directory`
+- `Peer dependency conflicts`
+- `npm ERR!`
+
+Soluciones:
+1. Limpiar cache de npm:
+   ```bash
+   npm cache clean --force
+   ```
+
+2. Eliminar node_modules y package-lock.json:
+   ```bash
+   # Windows
+   rmdir /s /q node_modules
+   del package-lock.json
+   
+   # Linux/macOS
+   rm -rf node_modules package-lock.json
+   ```
+
+3. Reinstalar:
+   ```bash
+   npm install
+   ```
+
+4. Usar --legacy-peer-deps si hay conflictos:
+   ```bash
+   npm install --legacy-peer-deps
+   ```
+
+### Problema: Eureka muestra servicio pero con IP incorrecta
+
+Síntomas:
+- Servicio aparece en Eureka pero no responde
+- IP mostrada es 192.168.x.x o similar
+
+Soluciones:
+1. Forzar hostname en `application.properties`:
+   ```properties
+   eureka.instance.hostname=localhost
+   eureka.instance.prefer-ip-address=false
+   ```
+
+2. Reiniciar servicio después de cambio
+
+### Problema: Frontend muestra "Uncaught SyntaxError"
+
+Síntomas:
+- Errores JavaScript en consola
+- Página en blanco
+
+Soluciones:
+1. Verificar versión de Node.js:
+   ```bash
+   node --version  # Debe ser v18.x.x
+   ```
+
+2. Reinstalar dependencias:
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
+
+3. Limpiar cache de Next.js:
+   ```bash
+   rm -rf .next
+   npm run dev
+   ```
+
+## Comandos Útiles para Desarrollo
+
+### Verificar Estado del Sistema
+
+```bash
+# Ver todos los procesos Java corriendo
+jps -l
+
+# Ver puertos ocupados
+netstat -ano | findstr :876   # Windows
+lsof -i | grep LISTEN          # Linux/macOS
+
+# Ver logs de un servicio específico
+# (Buscar en la terminal donde se ejecutó mvn spring-boot:run)
+```
+
+### Reiniciar Servicios
+
+```bash
+# Detener servicio: Ctrl+C en la terminal correspondiente
+
+# Reiniciar Eureka
+cd Microservicios/eureka-server
+mvn spring-boot:run
+
+# Reiniciar auth
+cd Microservicios/demo
+mvn spring-boot:run
+
+# ... y así sucesivamente
+```
+
+### Limpiar Compilaciones
+
+```bash
+# Limpiar un microservicio
+cd Microservicios/msvc-producto
+mvn clean
+
+# Limpiar todos
+cd Microservicios
+for /d %d in (*) do (cd %d && mvn clean && cd ..)  # Windows
+find . -name "pom.xml" -execdir mvn clean \;       # Linux/macOS
+```
+
+## Contacto y Soporte
+
+Para cualquier duda: Contactar a Brayan Daniel Patiño vía WhatsApp
+
+Información adicional:
+- Revisar README.md en la raíz del proyecto
+- Consultar documentación de Spring Boot: https://spring.io/projects/spring-boot
+- Consultar documentación de Next.js: https://nextjs.org/docs
+
+

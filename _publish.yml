@@ -1,0 +1,4 @@
+- source: project
+  quarto-pub:
+    - id: bc8641e0-c1bb-4f2e-b632-cd62fc3187dc
+      url: https://epciclon.quarto.pub/manual-vinculacion-sigchos

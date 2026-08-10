@@ -1,0 +1,35 @@
+{
+  "index.qmd": {
+    "index.html": "989b2054"
+  },
+  "01-introduccion.qmd": {
+    "01-introduccion.html": "9b602294"
+  },
+  "02-arquitectura.qmd": {
+    "02-arquitectura.html": "df0b7f5e"
+  },
+  "03-tecnologias.qmd": {
+    "03-tecnologias.html": "461fc4ff"
+  },
+  "04-microservicios.qmd": {
+    "04-microservicios.html": "60344bff"
+  },
+  "05-base-datos.qmd": {
+    "05-base-datos.html": "7064ef5f"
+  },
+  "06-seguridad.qmd": {
+    "06-seguridad.html": "45a38744"
+  },
+  "07-apis-rest.qmd": {
+    "07-apis-rest.html": "07879a60"
+  },
+  "08-despliegue.qmd": {
+    "08-despliegue.html": "c98e9a5e"
+  },
+  "09-mantenimiento.qmd": {
+    "09-mantenimiento.html": "0a646db1"
+  },
+  "referencias.qmd": {
+    "referencias.html": "e89db9d0"
+  }
+}

@@ -1,0 +1,36 @@
+% 1. Forzamos números arábigos y empezamos sin encabezado (para el índice)
+\pagenumbering{arabic}
+\pagestyle{empty}
+
+% 2. Definición del código del documento como comando
+\newcommand{\docCode}{SIGCHOS-MNL-V1-2026-001}
+
+% 3. Definición del comando de activación
+\newcommand{\activarEncabezado}{
+    \pagestyle{fancy}
+    \fancyhf{}
+
+    % --- ENCABEZADO: tabla de 3 columnas con borde negro dividiendo ---
+    \fancyhead[C]{%
+        \renewcommand{\arraystretch}{1.2}%
+        \setlength{\tabcolsep}{4pt}%
+        \begin{tabularx}{\textwidth}{|m{2.5cm}|>{\centering\arraybackslash}X|m{5.5cm}|}
+            \hline
+            \multirow{3}{*}{\centering\includegraphics[width=2.5cm,keepaspectratio]{images/logo-espe.png}} & 
+            \multirow{3}{*}{\textbf{\fontsize{10pt}{12pt}\selectfont\makecell{MANUAL TÉCNICO DEL\\[2pt]SISTEMA DE COMERCIO ELECTRÓNICO}}} & 
+            \textbf{\fontsize{9pt}{10pt}\selectfont ÁREA DE TECNOLOGÍA E INNOVACIÓN} \\ \cline{3-3}
+            & & \fontsize{8pt}{9pt}\selectfont Código de documento:\ \docCode \\ \cline{3-3}
+            & & \fontsize{9pt}{10pt}\selectfont Página:\ \thepage\ de \pageref*{LastPage} \\
+            \hline
+        \end{tabularx}%
+    }
+
+    % Pie de página: código de proceso (izq) y revisión (der)
+    \fancyfoot[L]{\footnotesize\textit{Código de proceso: SIG.1.0}}
+    \fancyfoot[R]{\footnotesize\textit{Rev. ATI: 2026-abr-23}}
+
+
+    % Aplicar a páginas de inicio de capítulo
+    \fancypagestyle{plain}{\pagestyle{fancy}}
+    \renewcommand{\headrulewidth}{0pt}
+}

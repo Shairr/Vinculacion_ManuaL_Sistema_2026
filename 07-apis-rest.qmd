@@ -1,0 +1,2017 @@
+# Sección APIs REST
+
+\begin{importantbox}
+\textbf{Importante:} Las APIs REST son la mayor superficie de ataque. Bloquee Swagger UI en producción, exija validación cruzada de empresaId y asegure que las llamadas Feign circulen solo por red interna (VPC). Transacciones de venta deben confirmarse atómicamente con Kushki.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} La arquitectura REST abstrae comunicaciones con OpenFeign, optimiza consultas masivas (evitando el N+1) e incluye JWT en el payload para minimizar peticiones. Swagger UI centralizado simplifica pruebas interactivas y consolida los endpoints.
+\end{infobox}
+
+## Configuración Global
+
+### CORS
+Configuración de Cross-Origin Resource Sharing permitida para el cliente web:
+
+- Orígenes: `http://localhost:3000`
+- Métodos: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+### Endpoints Base & Documentación
+Acceso a Swagger UI y rutas base:
+
+| Microservicio | Puerto | Base URL | Swagger UI |
+|:---|:---|:---|:---|
+| Service Discovery | 8761 | `http://localhost:8761` | *Eureka Dashboard* |
+| Auth Service | 8080 | `http://localhost:8080` | `/swagger-ui.html` |
+| Product Service | 8081 | `http://localhost:8081` | `/swagger-ui.html` |
+| Inventory Service | 8082 | `http://localhost:8082` | `/swagger-ui.html` |
+| Sales Service | 8083 | `http://localhost:8083` | `/swagger-ui.html` |
+
+: Direcciones Base y Swagger UI
+
+## API: Auth Service (msvc-auth)
+
+Base URL: `http://localhost:8080`
+
+### Endpoints Públicos
+
+#### POST /api/auth/registro
+Registro de nuevos clientes.
+
+Request:
+
+```http
+POST /api/auth/registro
+Content-Type: application/json
+
+{
+  "username": "cliente123",
+  "email": "cliente@example.com",
+  "password": "MiContraseña123!",
+  "nombre": "Juan",
+  "apellido": "Pérez"
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 5,
+  "username": "cliente123",
+  "email": "cliente@example.com",
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "activo": true,
+  "roles": ["ROLE_USER"]
+}
+```
+
+Errores:
+
+- `400 Bad Request`: Username o email ya existe, datos de validación inválidos
+
+
+#### POST /api/auth/login
+
+Descripción: Autenticar usuario y obtener token JWT OAuth2.
+
+Request:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "usuario": {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@sigchos.gob.ec",
+    "nombre": "Administrador",
+    "apellido": "Sistema",
+    "activo": true,
+    "roles": ["ROLE_ADMIN"]
+  }
+}
+```
+
+Errores:
+
+- `401 Unauthorized`: Credenciales inválidas
+
+
+### Endpoints de Gestión de Usuarios (Solo ADMIN)
+
+Todos los siguientes endpoints requieren:
+
+```http
+Authorization: Bearer {token}
+```
+
+Y el usuario debe tener rol `ADMIN`.
+
+#### POST /api/usuarios
+
+Descripción: Crear usuario con rol específico (solo Admin puede elegir roles).
+
+Request:
+
+```http
+POST /api/usuarios
+Authorization: Bearer {token_admin}
+Content-Type: application/json
+
+{
+  "username": "emprendedor1",
+  "email": "emprendedor@example.com",
+  "password": "Pass123!",
+  "nombre": "María",
+  "apellido": "González",
+  "roles": ["ROLE_EMP"]
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 6,
+  "username": "emprendedor1",
+  "email": "emprendedor@example.com",
+  "nombre": "María",
+  "apellido": "González",
+  "activo": true,
+  "roles": ["ROLE_EMP"]
+}
+```
+
+Errores:
+
+- `400`: Username o email ya existe
+- `403`: Usuario no tiene rol ADMIN
+
+
+#### GET /api/usuarios
+
+Descripción: Listar todos los usuarios del sistema.
+
+Request:
+
+```http
+GET /api/usuarios
+Authorization: Bearer {token_admin}
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@sigchos.gob.ec",
+    "nombre": "Administrador",
+    "apellido": "Sistema",
+    "activo": true,
+    "roles": ["ROLE_ADMIN"]
+  },
+  {
+    "id": 2,
+    "username": "emprendedor1",
+    "email": "emprendedor@example.com",
+    "nombre": "María",
+    "apellido": "González",
+    "activo": true,
+    "roles": ["ROLE_EMP"]
+  }
+]
+```
+
+
+#### GET /api/usuarios/{id}
+
+Descripción: Obtener usuario por ID.
+
+Request:
+
+```http
+GET /api/usuarios/1
+Authorization: Bearer {token_admin}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 1,
+  "username": "admin",
+  "email": "admin@sigchos.gob.ec",
+  "nombre": "Administrador",
+  "apellido": "Sistema",
+  "activo": true,
+  "roles": ["ROLE_ADMIN"]
+}
+```
+
+Errores:
+
+- `404`: Usuario no encontrado
+
+
+#### PUT /api/usuarios/{id}
+
+Descripción: Actualizar información de usuario.
+
+Request:
+
+```http
+PUT /api/usuarios/1
+Authorization: Bearer {token_admin}
+Content-Type: application/json
+
+{
+  "nombre": "Administrador Principal",
+  "apellido": "Sistema",
+  "email": "admin@sigchos.gob.ec"
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 1,
+  "username": "admin",
+  "email": "admin@sigchos.gob.ec",
+  "nombre": "Administrador Principal",
+  "apellido": "Sistema",
+  "activo": true,
+  "roles": ["ROLE_ADMIN"]
+}
+```
+
+
+#### PATCH /api/usuarios/{id}/estado
+
+Descripción: Cambiar estado activo/inactivo del usuario.
+
+Request:
+
+```http
+PATCH /api/usuarios/2/estado
+Authorization: Bearer {token_admin}
+Content-Type: application/json
+
+{
+  "activo": false
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 2,
+  "username": "emprendedor1",
+  "email": "emprendedor@example.com",
+  "nombre": "María",
+  "apellido": "González",
+  "activo": false,
+  "roles": ["ROLE_EMP"]
+}
+```
+
+
+#### DELETE /api/usuarios/{id}
+
+Descripción: Eliminar usuario (eliminación física).
+
+Request:
+
+```http
+DELETE /api/usuarios/2
+Authorization: Bearer {token_admin}
+```
+
+Response (204 No Content)
+
+
+#### GET /api/usuarios/buscar?q={query}
+
+Descripción: Buscar usuarios por nombre, apellido, username o email.
+
+Request:
+
+```http
+GET /api/usuarios/buscar?q=María
+Authorization: Bearer {token_admin}
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 2,
+    "username": "emprendedor1",
+    "email": "emprendedor@example.com",
+    "nombre": "María",
+    "apellido": "González",
+    "activo": true,
+    "roles": ["ROLE_EMP"]
+  }
+]
+```
+
+
+#### GET /api/usuarios/rol/{rol}
+
+Descripción: Obtener usuarios por rol específico.
+
+Request:
+
+```http
+GET /api/usuarios/rol/ROLE_EMP
+Authorization: Bearer {token_admin}
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 2,
+    "username": "emprendedor1",
+    "email": "emprendedor@example.com",
+    "nombre": "María",
+    "apellido": "González",
+    "activo": true,
+    "roles": ["ROLE_EMP"]
+  }
+]
+```
+
+
+#### GET /api/usuarios/estadisticas
+
+Descripción: Obtener estadísticas de usuarios del sistema.
+
+Request:
+
+```http
+GET /api/usuarios/estadisticas
+Authorization: Bearer {token_admin}
+```
+
+Response (200 OK):
+
+```json
+{
+  "totalUsuarios": 15,
+  "usuariosActivos": 12,
+  "usuariosInactivos": 3,
+  "porRol": {
+    "ROLE_ADMIN": 2,
+    "ROLE_EMP": 8,
+    "ROLE_USER": 5
+  }
+}
+```
+
+
+#### GET /api/usuarios/validar/username/{username}
+
+Descripción: Validar disponibilidad de username.
+
+Request:
+
+```http
+GET /api/usuarios/validar/username/nuevo_usuario
+Authorization: Bearer {token_admin}
+```
+
+Response (200 OK):
+
+```json
+true
+```
+
+(Retorna `true` si está disponible, `false` si ya existe)
+
+
+#### GET /api/usuarios/validar/email/{email}
+
+Descripción: Validar disponibilidad de email.
+
+Request:
+
+```http
+GET /api/usuarios/validar/email/nuevo@example.com
+Authorization: Bearer {token_admin}
+```
+
+Response (200 OK):
+
+```json
+true
+```
+
+
+## API: Product Service (msvc-producto)
+
+Base URL: `http://localhost:8081`  
+Swagger: `http://localhost:8081/swagger-ui.html`  
+Base de datos: PostgreSQL `productos` en puerto 5433
+
+### Endpoints de Productos
+
+#### POST /api/productos
+
+Descripción: Crear un nuevo producto.
+
+Request:
+
+```http
+POST /api/productos
+Content-Type: application/json
+
+{
+  "nombre": "Artesanía de Madera",
+  "descripcion": "Hermosa artesanía tallada a mano",
+  "precio": 25.50,
+  "imagen": "url_imagen",
+  "empresaId": 1,
+  "categoriaId": 2
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 10,
+  "nombre": "Artesanía de Madera",
+  "descripcion": "Hermosa artesanía tallada a mano",
+  "precio": 25.50,
+  "imagen": "url_imagen",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:30:00",
+  "empresa": {
+    "id": 1,
+    "nombre": "Artesanías Sigchos"
+  },
+  "categoria": {
+    "id": 2,
+    "nombre": "Artesanías"
+  },
+  "inventario": {
+    "cantidad": 0,
+    "ubicacion": "Almacén principal"
+  }
+}
+```
+
+
+#### PUT /api/productos/{id}
+
+Descripción: Actualizar producto existente.
+
+Request:
+
+```http
+PUT /api/productos/10
+Content-Type: application/json
+
+{
+  "nombre": "Artesanía de Madera Premium",
+  "descripcion": "Hermosa artesanía tallada a mano - Edición especial",
+  "precio": 35.00,
+  "imagen": "url_imagen_actualizada",
+  "empresaId": 1,
+  "categoriaId": 2
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 10,
+  "nombre": "Artesanía de Madera Premium",
+  "precio": 35.00,
+  "fechaActualizacion": "2024-12-06T11:00:00"
+}
+```
+
+
+#### GET /api/productos/{id}
+
+Descripción: Obtener producto por ID (incluye información de inventario via Feign).
+
+Request:
+
+```http
+GET /api/productos/10
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 10,
+  "nombre": "Artesanía de Madera Premium",
+  "descripcion": "Hermosa artesanía tallada a mano - Edición especial",
+  "precio": 35.00,
+  "imagen": "url_imagen_actualizada",
+  "activo": true,
+  "empresa": {
+    "id": 1,
+    "nombre": "Artesanías Sigchos",
+    "descripcion": "Empresa familiar de artesanías"
+  },
+  "categoria": {
+    "id": 2,
+    "nombre": "Artesanías",
+    "descripcion": "Productos artesanales hechos a mano"
+  },
+  "inventario": {
+    "productoId": 10,
+    "cantidad": 15,
+    "ubicacion": "Almacén principal",
+    "activo": true
+  }
+}
+```
+
+
+#### GET /api/productos
+
+Descripción: Listar todos los productos (con información de inventario).
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 10,
+    "nombre": "Artesanía de Madera Premium",
+    "precio": 35.00,
+    "inventario": {
+      "cantidad": 15
+    }
+  },
+  {
+    "id": 11,
+    "nombre": "Mermelada de Mora",
+    "precio": 5.00,
+    "inventario": {
+      "cantidad": 50
+    }
+  }
+]
+```
+
+
+#### GET /api/productos/listado
+
+Descripción: Listar productos optimizado (solo datos esenciales, sin inventario).
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 10,
+    "nombre": "Artesanía de Madera Premium",
+    "precio": 35.00,
+    "imagen": "url_imagen",
+    "empresaNombre": "Artesanías Sigchos"
+  }
+]
+```
+
+
+#### GET /api/productos/empresa/{empresaId}
+
+Descripción: Listar productos de una empresa específica.
+
+Request:
+
+```http
+GET /api/productos/empresa/5
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 10,
+    "nombre": "Artesanía de Madera Premium",
+    "precio": 35.00,
+    "fechaCreacion": "2024-12-06T10:30:00"
+  },
+  {
+    "id": 12,
+    "nombre": "Poncho de Lana",
+    "precio": 45.00,
+    "fechaCreacion": "2024-12-07T09:00:00"
+  }
+]
+```
+
+
+#### GET /api/productos/categoria/{categoriaId}
+
+Descripción: Listar productos de una categoría específica.
+
+Request:
+
+```http
+GET /api/productos/categoria/3
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 11,
+    "nombre": "Mermelada de Mora",
+    "precio": 5.00,
+    "fechaCreacion": "2024-12-06T10:45:00"
+  },
+  {
+    "id": 15,
+    "nombre": "Queso de Hoja",
+    "precio": 3.50,
+    "fechaCreacion": "2024-12-07T08:30:00"
+  }
+]
+```
+
+
+#### DELETE /api/productos/{id}
+
+Descripción: Eliminar producto (desactivación lógica).
+
+Request:
+
+```http
+DELETE /api/productos/10
+```
+
+Response (204 No Content)
+
+
+#### PUT /api/productos/{id}/sincronizar-stock
+
+Descripción: Sincronizar stock desde inventario (callback interno entre microservicios).
+
+Request:
+
+```http
+PUT /api/productos/10/sincronizar-stock?stock=25
+```
+
+Parámetros:
+- `id` (path): ID del producto
+- `stock` (query): Nueva cantidad en stock
+
+Response (200 OK)
+
+Nota: Este endpoint es utilizado por msvc-inventario para notificar cambios de stock al catálogo de productos.
+
+
+### Endpoints de Empresas
+
+#### POST /api/empresas
+
+Descripción: Crear nueva empresa.
+
+Request:
+
+```http
+POST /api/empresas
+Content-Type: application/json
+
+{
+  "nombre": "Lácteos Andinos",
+  "ruc": "1234567890001",
+  "direccion": "Sigchos Centro",
+  "telefono": "0987654321",
+  "email": "lacteos@example.com"
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 5,
+  "nombre": "Lácteos Andinos",
+  "ruc": "1234567890001",
+  "direccion": "Sigchos Centro",
+  "telefono": "0987654321",
+  "email": "lacteos@example.com",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:00:00",
+  "fechaActualizacion": "2024-12-06T10:00:00"
+}
+```
+
+
+#### PUT /api/empresas/{id}
+
+Descripción: Actualizar empresa existente.
+
+Request:
+
+```http
+PUT /api/empresas/5
+Content-Type: application/json
+
+{
+  "nombre": "Lácteos Andinos S.A.",
+  "direccion": "Sigchos Norte",
+  "telefono": "0987654322"
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 5,
+  "nombre": "Lácteos Andinos S.A.",
+  "ruc": "1234567890001",
+  "direccion": "Sigchos Norte",
+  "telefono": "0987654322",
+  "email": "lacteos@example.com",
+  "activo": true,
+  "fechaActualizacion": "2024-12-07T10:00:00"
+}
+```
+
+
+#### GET /api/empresas/{id}
+
+Descripción: Obtener empresa por ID.
+
+Request:
+
+```http
+GET /api/empresas/5
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 5,
+  "nombre": "Lácteos Andinos S.A.",
+  "ruc": "1234567890001",
+  "direccion": "Sigchos Norte",
+  "telefono": "0987654322",
+  "email": "lacteos@example.com",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:00:00"
+}
+```
+
+
+#### GET /api/empresas
+
+Descripción: Listar todas las empresas activas.
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Artesanías Sigchos",
+    "ruc": "1234567890002",
+    "direccion": "Sigchos Centro",
+    "telefono": "0987654321",
+    "email": "artesanias@example.com",
+    "activo": true,
+    "fechaCreacion": "2024-11-15T10:00:00",
+    "fechaActualizacion": "2024-11-15T10:00:00"
+  },
+  {
+    "id": 5,
+    "nombre": "Lácteos Andinos",
+    "ruc": "1234567890001",
+    "direccion": "Sigchos Centro",
+    "telefono": "0987654321",
+    "email": "lacteos@example.com",
+    "activo": true,
+    "fechaCreacion": "2024-12-06T10:00:00",
+    "fechaActualizacion": "2024-12-06T10:00:00"
+  }
+]
+```
+
+
+#### DELETE /api/empresas/{id}
+
+Descripción: Eliminar empresa.
+
+Request:
+
+```http
+DELETE /api/empresas/5
+```
+
+Response (204 No Content)
+
+
+### Endpoints de Categorías
+
+#### POST /api/categorias
+
+Descripción: Crear nueva categoría.
+
+Request:
+
+```http
+POST /api/categorias
+Content-Type: application/json
+
+{
+  "nombre": "Textiles",
+  "descripcion": "Productos textiles artesanales"
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 7,
+  "nombre": "Textiles",
+  "descripcion": "Productos textiles artesanales",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:00:00",
+  "fechaActualizacion": "2024-12-06T10:00:00"
+}
+```
+
+
+#### PUT /api/categorias/{id}
+
+Descripción: Actualizar categoría existente.
+
+Request:
+
+```http
+PUT /api/categorias/7
+Content-Type: application/json
+
+{
+  "nombre": "Textiles Andinos",
+  "descripcion": "Productos textiles hechos con lana de alpaca"
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 7,
+  "nombre": "Textiles Andinos",
+  "descripcion": "Productos textiles hechos con lana de alpaca",
+  "activo": true,
+  "fechaActualizacion": "2024-12-07T11:00:00"
+}
+```
+
+
+#### GET /api/categorias/{id}
+
+Descripción: Obtener categoría por ID.
+
+Request:
+
+```http
+GET /api/categorias/7
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 7,
+  "nombre": "Textiles Andinos",
+  "descripcion": "Productos textiles hechos con lana de alpaca",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:00:00"
+}
+```
+
+
+#### GET /api/categorias
+
+Descripción: Listar todas las categorías.
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Alimentos",
+    "descripcion": "Productos alimenticios artesanales",
+    "activo": true,
+    "fechaCreacion": "2024-11-01T10:00:00",
+    "fechaActualizacion": "2024-11-01T10:00:00"
+  },
+  {
+    "id": 2,
+    "nombre": "Artesanías",
+    "descripcion": "Productos artesanales hechos a mano",
+    "activo": true,
+    "fechaCreacion": "2024-11-01T10:00:00",
+    "fechaActualizacion": "2024-11-01T10:00:00"
+  },
+  {
+    "id": 7,
+    "nombre": "Textiles",
+    "descripcion": "Productos textiles artesanales",
+    "activo": true,
+    "fechaCreacion": "2024-12-06T10:00:00",
+    "fechaActualizacion": "2024-12-06T10:00:00"
+  }
+]
+```
+
+
+#### DELETE /api/categorias/{id}
+
+Descripción: Eliminar categoría.
+
+Request:
+
+```http
+DELETE /api/categorias/7
+```
+
+Response (204 No Content)
+
+
+## API: Inventory Service (msvc-inventario)
+
+Base URL: `http://localhost:8082`  
+Swagger: `http://localhost:8082/swagger-ui.html`  
+Base de datos: PostgreSQL `inventario` en puerto 5433
+
+### Endpoints de Inventario
+
+#### POST /api/inventarios
+
+Descripción: Crear registro de inventario.
+
+Request:
+
+```http
+POST /api/inventarios
+Content-Type: application/json
+
+{
+  "productoId": 10,
+  "cantidad": 20,
+  "ubicacion": "Almacén principal"
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 15,
+  "cantidad": 20,
+  "ubicacion": "Almacén principal",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:00:00",
+  "fechaActualizacion": "2024-12-06T10:00:00",
+  "producto": {
+    "id": 10,
+    "nombre": "Artesanía de Madera Premium",
+    "precio": 35.00
+  }
+}
+```
+
+
+#### POST /api/inventarios/producto/{productoId}?stock={cantidad}
+
+Descripción: Crear inventario para producto específico (endpoint simplificado).
+
+Request:
+
+```http
+POST /api/inventarios/producto/10?stock=20
+```
+
+Response (201 Created)
+
+
+#### PUT /api/inventarios/{id}
+
+Descripción: Actualizar registro de inventario.
+
+Request:
+
+```http
+PUT /api/inventarios/15
+Content-Type: application/json
+
+{
+  "productoId": 10,
+  "cantidad": 25,
+  "ubicacion": "Almacén secundario"
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 15,
+  "cantidad": 25,
+  "ubicacion": "Almacén secundario",
+  "activo": true,
+  "fechaActualizacion": "2024-12-06T12:00:00"
+}
+```
+
+
+#### GET /api/inventarios/{id}
+
+Descripción: Obtener inventario por ID.
+
+Request:
+
+```http
+GET /api/inventarios/15
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 15,
+  "cantidad": 25,
+  "ubicacion": "Almacén secundario",
+  "activo": true,
+  "producto": {
+    "id": 10,
+    "nombre": "Artesanía de Madera Premium",
+    "precio": 35.00
+  }
+}
+```
+
+
+#### GET /api/inventarios/producto/{productoId}
+
+Descripción: Obtener inventario por ID de producto.
+
+Request:
+
+```http
+GET /api/inventarios/producto/10
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 15,
+  "cantidad": 25,
+  "ubicacion": "Almacén secundario",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:00:00",
+  "fechaActualizacion": "2024-12-06T14:00:00",
+  "producto": {
+    "nombre": "Artesanía de Madera Premium",
+    "precio": 35.00
+  }
+}
+```
+
+
+#### GET /api/inventarios
+
+Descripción: Listar todos los inventarios (con información de productos via Feign).
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 15,
+    "cantidad": 25,
+    "ubicacion": "Almacén secundario",
+    "producto": {
+      "id": 10,
+      "nombre": "Artesanía de Madera Premium"
+    }
+  },
+  {
+    "id": 16,
+    "cantidad": 50,
+    "ubicacion": "Bodega Fria",
+    "producto": {
+      "id": 11,
+      "nombre": "Mermelada de Mora"
+    }
+  }
+]
+```
+
+
+#### PUT /api/inventarios/producto/{productoId}/stock
+
+Descripción: Actualizar solo el stock de un producto.
+
+Request:
+
+```http
+PUT /api/inventarios/producto/10/stock?cantidad=30
+```
+
+Parámetros:
+- `productoId` (path): ID del producto
+- `cantidad` (query): Nueva cantidad en stock
+
+Response (200 OK):
+
+```json
+{
+  "id": 15,
+  "cantidad": 30,
+  "ubicacion": "Almacén principal"
+}
+```
+
+
+#### POST /api/inventarios/salida-lote
+
+Descripción: Procesar salida de inventario en lote (múltiples productos).
+
+Request:
+
+```http
+POST /api/inventarios/salida-lote
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "productoId": 10,
+      "cantidad": 2
+    },
+    {
+      "productoId": 11,
+      "cantidad": 3
+    }
+  ],
+  "motivo": "Venta #100"
+}
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 15,
+    "cantidad": 23,
+    "producto": {
+      "id": 10,
+      "nombre": "Artesanía de Madera Premium"
+    }
+  },
+  {
+    "id": 16,
+    "cantidad": 47,
+    "producto": {
+      "id": 11,
+      "nombre": "Mermelada de Mora"
+    }
+  }
+]
+```
+
+
+#### GET /api/inventarios/cantidad/producto/{productoId}
+
+Descripción: Obtener SOLO la cantidad de stock de un producto (endpoint optimizado).
+
+Request:
+
+```http
+GET /api/inventarios/cantidad/producto/10
+```
+
+Response (200 OK):
+
+```json
+25
+```
+
+Nota: Devuelve directamente un número entero, no un objeto JSON. Optimizado para consultas rápidas de stock.
+
+
+#### POST /api/inventarios/cantidad/batch
+
+Descripción: Obtener cantidades de múltiples productos en una sola petición (endpoint optimizado para rendimiento).
+
+Request:
+
+```http
+POST /api/inventarios/cantidad/batch
+Content-Type: application/json
+
+[1, 2, 3, 4, 5, 10, 11]
+```
+
+Response (200 OK):
+
+```json
+{
+  "1": 40,
+  "2": 0,
+  "3": 15,
+  "4": 7,
+  "5": 20,
+  "10": 25,
+  "11": 50
+}
+```
+
+Nota: Este endpoint es crítico para optimización. En lugar de hacer 7 peticiones individuales, se obtienen todas las cantidades en una sola consulta. Los productos sin inventario retornan 0.
+
+
+#### DELETE /api/inventarios/{id}
+
+Descripción: Eliminar registro de inventario.
+
+Request:
+
+```http
+DELETE /api/inventarios/15
+```
+
+Response (204 No Content)
+
+
+### Endpoints de Movimientos de Inventario
+
+#### POST /api/movimientos
+
+Descripción: Registrar movimiento de inventario (entrada/salida).
+
+Request:
+
+```http
+POST /api/movimientos
+Content-Type: application/json
+
+{
+  "inventarioId": 15,
+  "tipo": "ENTRADA",
+  "cantidad": 10,
+  "motivo": "Compra a proveedor"
+}
+```
+
+Tipos válidos: `ENTRADA`, `SALIDA`, `AJUSTE`
+
+Response (201 Created):
+
+```json
+{
+  "id": 50,
+  "inventarioId": 15,
+  "tipo": "ENTRADA",
+  "cantidad": 10,
+  "motivo": "Compra a proveedor",
+  "fechaMovimiento": "2024-12-06T11:00:00"
+}
+```
+
+
+#### GET /api/movimientos/{id}
+
+Descripción: Obtener movimiento por ID.
+
+Request:
+
+```http
+GET /api/movimientos/50
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 50,
+  "inventarioId": 15,
+  "tipo": "ENTRADA",
+  "cantidad": 10,
+  "motivo": "Compra a proveedor",
+  "fechaMovimiento": "2024-12-06T11:00:00"
+}
+```
+
+
+#### GET /api/movimientos/inventario/{inventarioId}
+
+Descripción: Listar movimientos de un inventario específico (trazabilidad).
+
+Request:
+
+```http
+GET /api/movimientos/inventario/15
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 50,
+    "tipo": "ENTRADA",
+    "cantidad": 10,
+    "fechaMovimiento": "2024-12-06T11:00:00",
+    "motivo": "Compra a proveedor"
+  },
+  {
+    "id": 51,
+    "tipo": "SALIDA",
+    "cantidad": 5,
+    "fechaMovimiento": "2024-12-06T14:00:00",
+    "motivo": "Venta"
+  }
+]
+```
+
+
+#### GET /api/movimientos
+
+Descripción: Listar todos los movimientos de inventario.
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 50,
+    "tipo": "ENTRADA",
+    "cantidad": 10,
+    "fechaMovimiento": "2024-12-06T11:00:00",
+    "motivo": "Compra a proveedor"
+  },
+  {
+    "id": 51,
+    "tipo": "SALIDA",
+    "cantidad": 5,
+    "fechaMovimiento": "2024-12-06T14:00:00",
+    "motivo": "Venta"
+  }
+]
+```
+
+
+## API: Sales Service (msvc-ventas)
+
+Base URL: `http://localhost:8083`  
+Swagger: `http://localhost:8083/swagger-ui.html`  
+Base de datos: PostgreSQL `ventas` en puerto 5433
+
+### Endpoints de Clientes
+
+#### POST /api/clientes
+
+Descripción: Crear nuevo cliente.
+
+Request:
+
+```http
+POST /api/clientes
+Content-Type: application/json
+
+{
+  "nombre": "Carlos",
+  "apellido": "Ramírez",
+  "email": "carlos@example.com",
+  "telefono": "0987654321",
+  "documento": "1234567890"
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 20,
+  "nombre": "Carlos",
+  "apellido": "Ramírez",
+  "email": "carlos@example.com",
+  "telefono": "0987654321",
+  "documento": "1234567890",
+  "activo": true,
+  "fechaCreacion": "2024-12-06T10:00:00",
+  "fechaActualizacion": "2024-12-06T10:00:00"
+}
+```
+
+
+#### PUT /api/clientes/{id}
+
+Descripción: Actualizar cliente existente.
+
+Request:
+
+```http
+PUT /api/clientes/20
+Content-Type: application/json
+
+{
+  "nombre": "Carlos",
+  "apellido": "Ramírez",
+  "telefono": "0999999999"
+}
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 20,
+  "nombre": "Carlos",
+  "apellido": "Ramírez",
+  "telefono": "0999999999",
+  "email": "carlos@example.com",
+  "activo": true
+}
+```
+
+
+#### GET /api/clientes/{id}
+
+Descripción: Obtener cliente por ID.
+
+Request:
+
+```http
+GET /api/clientes/20
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 20,
+  "nombre": "Carlos",
+  "apellido": "Ramírez",
+  "email": "carlos@example.com",
+  "telefono": "0987654321",
+  "documento": "1234567890",
+  "activo": true
+}
+```
+
+
+#### GET /api/clientes/email/{email}
+
+Descripción: Obtener cliente por email.
+
+Request:
+
+```http
+GET /api/clientes/email/carlos@example.com
+```
+
+
+#### GET /api/clientes
+
+Descripción: Listar todos los clientes activos.
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 20,
+    "nombre": "Carlos",
+    "apellido": "Ramírez",
+    "email": "carlos@example.com",
+    "telefono": "0987654321"
+  },
+  {
+    "id": 21,
+    "nombre": "Ana",
+    "apellido": "Gómez",
+    "email": "ana@example.com",
+    "telefono": "0981234567"
+  }
+]
+```
+
+
+#### DELETE /api/clientes/{id}
+
+Descripción: Eliminar cliente (desactivación lógica).
+
+Request:
+
+```http
+DELETE /api/clientes/20
+```
+
+Response (204 No Content)
+
+
+### Endpoints de Ventas
+
+#### POST /api/ventas
+
+Descripción: Crear nueva venta (actualiza inventario via Feign).
+
+Request:
+
+```http
+POST /api/ventas
+Content-Type: application/json
+
+{
+  "clienteId": 20,
+  "items": [
+    {
+      "productoId": 10,
+      "cantidad": 2
+    },
+    {
+      "productoId": 11,
+      "cantidad": 3
+    }
+  ]
+}
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 100,
+  "numeroFactura": "FAC-2024-000100",
+  "cliente": {
+    "id": 20,
+    "nombre": "Carlos",
+    "apellido": "Ramírez",
+    "email": "carlos@example.com",
+    "telefono": "0987654321",
+    "documento": "1234567890",
+    "activo": true
+  },
+  "subtotal": 85.00,
+  "impuesto": 10.20,
+  "total": 95.20,
+  "estado": "COMPLETADA",
+  "fechaVenta": "2024-12-06T15:00:00",
+  "fechaCreacion": "2024-12-06T15:00:00",
+  "fechaActualizacion": "2024-12-06T15:00:00",
+  "detalles": [
+    {
+      "id": 200,
+      "productoId": 10,
+      "nombreProducto": "Artesanía de Madera Premium",
+      "cantidad": 2,
+      "precioUnitario": 35.00,
+      "subtotal": 70.00
+    },
+    {
+      "id": 201,
+      "productoId": 11,
+      "nombreProducto": "Mermelada de Mora",
+      "cantidad": 3,
+      "precioUnitario": 5.00,
+      "subtotal": 15.00
+    }
+  ]
+}
+```
+
+Estados de Venta: `PENDIENTE`, `COMPLETADA`, `CANCELADA`
+
+Errores:
+
+- `400`: Stock insuficiente
+- `404`: Cliente o producto no encontrado
+
+
+#### GET /api/ventas/{id}
+
+Descripción: Obtener venta por ID.
+
+Request:
+
+```http
+GET /api/ventas/100
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 100,
+  "numeroFactura": "FAC-2024-000100",
+  "cliente": {
+    "id": 20,
+    "nombre": "Carlos",
+    "apellido": "Ramírez"
+  },
+  "total": 95.20,
+  "estado": "COMPLETADA",
+  "detalles": [
+    {
+      "productoId": 10,
+      "nombreProducto": "Artesanía de Madera Premium",
+      "cantidad": 2,
+      "subtotal": 70.00
+    }
+  ]
+}
+```
+
+
+#### GET /api/ventas/factura/{numeroFactura}
+
+Descripción: Obtener venta por número de factura.
+
+Request:
+
+```http
+GET /api/ventas/factura/FAC-2024-000100
+```
+
+
+#### GET /api/ventas/cliente/{clienteId}
+
+Descripción: Listar ventas de un cliente específico.
+
+Request:
+
+```http
+GET /api/ventas/cliente/20
+```
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 100,
+    "numeroFactura": "FAC-2024-000100",
+    "cliente": {
+      "id": 20,
+      "nombre": "Carlos",
+      "apellido": "Ramírez",
+      "email": "carlos@example.com",
+      "telefono": "0987654321",
+      "documento": "1234567890",
+      "activo": true
+    },
+    "subtotal": 85.00,
+    "impuesto": 10.20,
+    "total": 95.20,
+    "estado": "COMPLETADA",
+    "fechaVenta": "2024-12-06T15:00:00",
+    "fechaCreacion": "2024-12-06T15:00:00",
+    "fechaActualizacion": "2024-12-06T15:00:00",
+    "detalles": [
+      {
+        "id": 200,
+        "productoId": 10,
+        "nombreProducto": "Artesanía de Madera Premium",
+        "cantidad": 2,
+        "precioUnitario": 35.00,
+        "subtotal": 70.00
+      }
+    ]
+  }
+]
+```
+
+
+#### GET /api/ventas
+
+Descripción: Listar todas las ventas.
+
+Response (200 OK):
+
+```json
+[
+  {
+    "id": 100,
+    "numeroFactura": "FAC-2024-000100",
+    "clienteNombre": "Carlos Ramírez",
+    "total": 95.20,
+    "estado": "COMPLETADA",
+    "fechaVenta": "2024-12-06T15:00:00"
+  },
+  {
+    "id": 101,
+    "numeroFactura": "FAC-2024-000101",
+    "clienteNombre": "Ana Gómez",
+    "total": 45.00,
+    "estado": "PENDIENTE",
+    "fechaVenta": "2024-12-07T09:30:00"
+  }
+]
+```
+
+
+#### PUT /api/ventas/{id}/completar
+
+Descripción: Completar una venta pendiente (actualiza inventario).
+
+Request:
+
+```http
+PUT /api/ventas/100/completar
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 100,
+  "numeroFactura": "FAC-2024-000100",
+  "cliente": {
+    "id": 20,
+    "nombre": "Carlos",
+    "apellido": "Ramírez",
+    "email": "carlos@example.com"
+  },
+  "subtotal": 85.00,
+  "impuesto": 10.20,
+  "total": 95.20,
+  "estado": "COMPLETADA",
+  "fechaVenta": "2024-12-06T15:00:00",
+  "fechaCreacion": "2024-12-06T15:00:00",
+  "fechaActualizacion": "2024-12-06T15:30:00",
+  "detalles": [
+    {
+      "id": 200,
+      "productoId": 10,
+      "nombreProducto": "Artesanía de Madera Premium",
+      "cantidad": 2,
+      "precioUnitario": 35.00,
+      "subtotal": 70.00
+    }
+  ]
+}
+```
+
+
+#### PUT /api/ventas/{id}/cancelar
+
+Descripción: Cancelar una venta.
+
+Request:
+
+```http
+PUT /api/ventas/100/cancelar
+```
+
+Response (200 OK):
+
+```json
+{
+  "id": 100,
+  "numeroFactura": "FAC-2024-000100",
+  "cliente": {
+    "id": 20,
+    "nombre": "Carlos",
+    "apellido": "Ramírez",
+    "email": "carlos@example.com"
+  },
+  "subtotal": 85.00,
+  "impuesto": 10.20,
+  "total": 95.20,
+  "estado": "CANCELADA",
+  "fechaVenta": "2024-12-06T15:00:00",
+  "fechaCreacion": "2024-12-06T15:00:00",
+  "fechaActualizacion": "2024-12-06T16:00:00",
+  "detalles": [
+    {
+      "id": 200,
+      "productoId": 10,
+      "nombreProducto": "Artesanía de Madera Premium",
+      "cantidad": 2,
+      "precioUnitario": 35.00,
+      "subtotal": 70.00
+    }
+  ]
+}
+```
+
+
+## 7.6 Comunicación Entre Microservicios (OpenFeign)
+
+Los microservicios utilizan OpenFeign para la orquestación de procesos y validación cruzada entre módulos:
+
+### 7.6.1 Sincronización: Catálogo a Inventario
+
+- Origen: `msvc-producto`
+- Destino: `msvc-inventario`
+- Interfaz: `InventarioClient`
+- Operación: `obtenerInventarioPorProductoId(Long productoId)`
+- Propósito: Permite validar si un producto tiene stock inicializado al momento de listarlo en el catálogo para administradores.
+
+### 7.6.2 Consulta de Detalles: Inventario a Catálogo
+
+- Origen: `msvc-inventario`
+- Destino: `msvc-producto`
+- Interfaz: `ProductoClient`
+- Operación: `obtenerProducto(Long productoId)`
+- Propósito: Enriquece los reportes de movimientos de stock con el nombre y detalles comerciales del producto.
+
+### 7.6.3 Validación de Precios: Ventas a Catálogo
+
+- Origen: `msvc-ventas`
+- Destino: `msvc-producto`
+- Interfaz: `ProductoClient`
+- Operación: `obtenerProducto(Long productoId)`
+- Propósito: Recupera el precio oficial del servidor para evitar manipulaciones de montos desde el frontend durante el checkout.
+
+### 7.6.4 Reserva de Stock: Ventas a Inventario
+
+- Origen: `msvc-ventas`
+- Destino: `msvc-inventario`
+- Interfaz: `InventarioClient`
+- Operación: `actualizarStock(Long productoId, Integer cantidad)`
+- Propósito: Ejecuta el descuento atómico de unidades tras la confirmación exitosa del pago.
+
+### Circuit Breaker
+
+Todos los microservicios tienen habilitado Circuit Breaker:
+
+```properties
+feign.circuitbreaker.enabled=true
+```
+
+Si un servicio no responde, la llamada falla controladamente (`fallback`) sin bloquear la aplicación completa.
+
+
+## Eureka Service Discovery
+
+URL: `http://localhost:8761`
+
+Todos los microservicios se registran automáticamente en Eureka al iniciar.
+
+### Endpoints de Eureka
+
+- Dashboard: `http://localhost:8761`
+- Apps registradas: `http://localhost:8761/eureka/apps`
+- Instancias de servicio: `http://localhost:8761/eureka/apps/{APP_NAME}`
+
+### Nombres de Aplicación (spring.application.name)
+
+- `eureka-server`
+- `login` (msvc-auth)
+- `msvc-producto`
+- `msvc-inventario`
+- `msvc-ventas`
+
+
+## Swagger/OpenAPI
+
+Cada microservicio expone su documentación OpenAPI:
+
+- Swagger UI: `http://localhost:{port}/swagger-ui.html`
+- API Docs JSON: `http://localhost:{port}/api-docs`
+
+Ejemplo para msvc-producto:
+
+- Swagger UI: http://localhost:8081/swagger-ui.html
+- API Docs: http://localhost:8081/api-docs
+
+Configuración en `application.properties`:
+
+```properties
+springdoc.api-docs.path=/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.swagger-ui.operationsSorter=method
+springdoc.swagger-ui.tagsSorter=alpha
+```
+
+
+## Ejemplos de Uso con cURL
+
+### Registro de usuario
+
+```bash
+curl -X POST http://localhost:8080/api/auth/registro \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "test123",
+    "email": "test@example.com",
+    "password": "Pass123!",
+    "nombre": "Test",
+    "apellido": "User"
+  }'
+```
+
+### Login
+
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "test123",
+    "password": "Pass123!"
+  }'
+```
+
+### Listar productos
+
+```bash
+curl http://localhost:8081/api/productos
+```
+
+### Crear venta
+
+```bash
+curl -X POST http://localhost:8083/api/ventas \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {token}" \
+  -d '{
+    "clienteId": 1,
+    "items": [
+      {
+        "productoId": 1,
+        "cantidad": 2
+      }
+    ]
+  }'
+```
+
+
+## 7.10 Resumen de Endpoints por Microservicio
+
+A continuación se presenta el desglose total de los 60 endpoints REST implementados en el sistema, organizados por dominio funcional.
+
+### 7.10.1 Auth Service (Identidad)
+Total: 13 Endpoints
+
+*   Públicos (2): Registro y Login (`/api/auth/`).
+*   Administrativos (11): Gestión completa de usuarios (`/api/usuarios/`).
+    *   Incluye CRUD completo, búsqueda avanzada, cambio de estado y validaciones de username/email.
+
+### 7.10.2 Product Service (Catálogo Central)
+Total: 19 Endpoints
+
+*   Productos (9):
+    *   Operaciones CRUD.
+    *   Consultas por Empresa y Categoría.
+    *   Endpoint interno de sincronización de stock.
+*   Empresas (5): Gestión de proveedores/emprendedores.
+*   Categorías (5): Clasificación de productos.
+
+### 7.10.3 Inventory Service (Logística)
+Total: 15 Endpoints
+
+*   Inventario (11):
+    *   Gestión de stock por producto.
+    *   Operaciones de lote (salida masiva por ventas).
+    *   Consultas de disponibilidad.
+*   Movimientos (4): Historial de trazabilidad (Entradas/Salidas).
+
+### 7.10.4 Sales Service (Ventas)
+Total: 13 Endpoints
+
+*   Clientes (6): Gestión de información de compradores.
+*   Ventas (7):
+    *   Procesamiento de checkout.
+    *   Historial de pedidos por cliente.
+    *   Anulación y consultas de facturas.
+
+: Resumen de Capacidades de API REST

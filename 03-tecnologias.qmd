@@ -1,0 +1,292 @@
+# Sección Stack Tecnológico
+
+El sistema se basa en una arquitectura de microservicios con un frontend moderno en React. A continuación se detallan las tecnologías clave.
+
+\begin{importantbox}
+\textbf{Importante:} Mantener compatibilidad estricta entre Spring Boot 3.4.x y Spring Cloud 2024.0.1 es obligatorio. En producción, inyecte claves RSA mediante variables de entorno seguras y configure \texttt{hibernate.ddl-auto} como \texttt{validate} o \texttt{none} para evitar alteraciones irreversibles.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} El stack emplea Next.js 13 para el frontend, Spring Boot para microservicios con OpenFeign, PostgreSQL aislado por servicio y seguridad JWT con RSA. Esta combinación técnica permite el escalamiento horizontal y despliegues completamente independientes.
+\end{infobox}
+
+## Panorama de Tecnologías
+
+
+La siguiente tabla resume los componentes, versiones exactas y su función dentro de la arquitectura del proyecto.
+
+| Componente | Tecnología | Versión | Propósito |
+|:---|:---|:---|:---|
+| Frontend Framework | Next.js | 13.4.9 | Framework React con Server Components y App Router. |
+| UI Library | React | 18.2.0 | Librería base para interfaces de usuario. |
+| UI Components | PrimeReact (Avalon) | 10.2.1 | Suite de componentes visuales (Grids, Forms, Dialogs). |
+| Lenguaje Frontend | TypeScript | 5.0.4 | Superconjunto tipado de JavaScript. |
+| Backend Framework | Spring Boot | 3.4.4 / 3.4.5 | Framework para microservicios Java. |
+| Lenguaje Backend | Java | 17 (LTS) | Lenguaje de programación del servidor. |
+| Service Discovery | Netflix Eureka | 2024.0.1 | Registro y localización dinámica de servicios. |
+| Seguridad | OAuth2 + JWT | 3.4.4 | Protocolo de autenticación stateless. |
+| Base de Datos | PostgreSQL | 14 | Motor de base de datos relacional (Puerto 5433). |
+| ORM | Hibernate (JPA) | 6.x | Mapeo Objeto-Relacional. |
+| Cliente HTTP | OpenFeign | 2024.0.1 | Cliente declarativo para comunicación inter-servicios. |
+| Documentación API | SpringDoc OpenAPI | 2.8.0 | Generador automático de Swagger UI. |
+| Librería Util | Lombok | 1.18.30 | Reducción de código repetitivo (Getters/Setters). |
+| Build Tool | Maven | 3.8+ | Gestión de dependencias y construcción Java. |
+| Gestor Paquetes | npm | 9.x | Gestión de dependencias JavaScript/Node_modules. |
+
+: Resumen del Stack Tecnológico del Proyecto
+
+## Detalles del Frontend
+
+
+### Framework: Next.js 13
+Utilizamos Next.js 13.4.9 implementando el App Router (`app/`), lo que permite:
+*   Server Components: Renderizado eficiente en el servidor por defecto.
+*   Layouts Anidados: Estructura jerárquica para menús y barras de navegación (`layout.tsx`).
+
+#### Estructura del Proyecto (`avalon-react`)
+
+```text
+avalon-react-10.1.0/
+├── app/
+│   ├── (main)/           # Rutas protegidas (Dashboard, Ventas)
+│   ├── (full-page)/      # Rutas públicas (Login, Landing)
+│   ├── layout.tsx        # Layout raíz
+│   └── page.tsx          # Página de inicio
+├── services/             # Capa de integración con Backend
+│   ├── authService.ts    # Manejo de tokens JWT
+│   └── ventasService.ts  # Lógica de negocio de ventas
+├── types/                # Interfaces TypeScript (Modelos)
+└── next.config.js        # Configuración del servidor Next
+```
+
+### Librería UI: PrimeReact
+
+Se utiliza la plantilla profesional Avalon basada en PrimeReact 10.2.1.
+
+*   Componentes Clave: `DataTable` (Inventarios), `DataView` (Catálogo), `Dialog` (Modales CRUD).
+*   Estilos: `PrimeFlex` 3.3.0 para diseño responsivo mediante clases utilitarias.
+*   Iconos: `PrimeIcons` 6.0.1.
+
+## Detalles del Backend
+
+
+### Framework: Spring Boot 3
+El núcleo del backend son microservicios autónomos construidos con Spring Boot 3.4.5 (versión más reciente usada en *ventas/inventario*) y 3.4.4 (*auth*).
+
+#### Dependencias Críticas (`pom.xml`)
+
+```xml
+<!-- Comunicación entre microservicios -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-openfeign</artifactId>
+</dependency>
+
+<!-- Registro en Eureka -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+
+<!-- Seguridad (solo en msvc-auth) -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+</dependency>
+```
+
+### Seguridad y Cifrado
+*   JWT Library: `nimbus-jose-jwt` 9.37.3 para firma y validación de tokens RSA.
+*   BCrypt: Algoritmo estándar para hashing de contraseñas de usuarios.
+
+## Base de Datos
+
+
+### PostgreSQL 14
+El sistema requiere una instancia de PostgreSQL ejecutándose específicamente en el puerto 5433.
+
+*   Driver JDBC: `org.postgresql:postgresql`
+*   Dialecto Hibernate: `org.hibernate.dialect.PostgreSQLDialect`
+
+```properties
+# Configuración Típica
+spring.datasource.url=jdbc:postgresql://localhost:5433/nombre_db
+spring.datasource.username=postgres
+spring.datasource.password=admin
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+```
+
+Nota: Todos los microservicios usan el puerto 5433 para PostgreSQL en desarrollo local.
+
+#### Bases de Datos del Sistema
+
+El sistema utiliza 4 bases de datos PostgreSQL independientes:
+
+1. auth-service: Gestión de usuarios y autenticación
+   - Tablas: `usuarios` (id, activo, apellido, email, nombre, password, username)
+   - Tabla: `usuario_roles` (usuario_id, rol) - Relación muchos a muchos
+   - Roles: `ROLE_USER`, `ROLE_EMP`, `ROLE_ADMIN`
+
+2. productos: Catálogo de productos, categorías y empresas
+   - Tablas: `categorias`, `empresas`, `productos`
+   - Relaciones: Producto → Categoria (ManyToOne), Producto → Empresa (ManyToOne)
+
+3. inventario: Gestión de stock y movimientos
+   - Tablas: `inventarios`, `movimientos_inventario`
+   - Campo `producto_id` (Long) sin FK - Patrón snapshot
+
+4. ventas: Registro de ventas y clientes
+   - Tablas: `clientes`, `ventas`, `detalles_venta`
+   - Estados de venta: `PENDIENTE`, `COMPLETADA`, `CANCELADA`
+
+
+## Service Discovery
+
+
+### Netflix Eureka
+
+Eureka es el servidor de registro y descubrimiento de servicios.
+
+#### Funcionamiento
+
+1. Servidor Eureka: Se levanta en puerto 8761 (por defecto)
+2. Clientes Eureka: Cada microservicio se registra al iniciar
+3. Heartbeats: Servicios envían señales periódicas de vida
+4. Discovery: Servicios pueden localizar otros servicios por nombre
+
+#### Configuración Eureka Server
+
+```yaml
+# application.yml de msvc-eureka - EJEMPLO
+server:
+  port: 8761
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+  server:
+    enable-self-preservation: false
+```
+
+#### Configuración Eureka Client
+
+```yaml
+# application.yml de microservicios - EJEMPLO
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+```
+
+## Seguridad
+
+
+### Spring Security
+
+Framework de seguridad para autenticación y autorización.
+
+#### Características Utilizadas
+
+- Autenticación basada en JWT
+- Protección de endpoints
+- CORS configuration
+- Encriptación de contraseñas con BCrypt
+
+### JWT (JSON Web Tokens)
+
+Estándar para tokens de autenticación stateless.
+
+#### Estructura de JWT
+
+```text
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.    # Header
+eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6I.  # Payload
+SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV      # Signature
+```
+
+#### Flujo JWT
+
+1. Usuario envía credenciales a `/auth/login`
+2. Backend valida y genera JWT firmado
+3. Cliente almacena token (localStorage/sessionStorage)
+4. Cliente incluye token en header: `Authorization: Bearer <token>`
+5. Backend valida firma y extrae información
+
+### BCrypt
+
+Algoritmo de hash para contraseñas.
+
+```java
+// Ejemplo de uso - CONCEPTUAL
+BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+String hashedPassword = encoder.encode("contraseña");
+boolean matches = encoder.matches("contraseña", hashedPassword);
+```
+
+## Herramientas de Desarrollo
+
+
+<!--
+  HERRAMIENTAS: Listar herramientas que probablemente se usaron.
+  Verificar en documentación del proyecto.
+-->
+
+### Build Tools
+
+- Maven: Gestión de dependencias y build para Java
+  - `pom.xml`: Archivo de configuración
+  - Comandos: `mvn clean install`, `mvn spring-boot:run`
+
+- npm o yarn: Gestión de paquetes para Node.js/React
+  - `package.json`: Dependencias
+  - Comandos: `npm install`, `npm run dev`
+
+
+## Dependencias y Versiones
+
+
+<!--
+  TABLA DE VERSIONES: Completar al revisar archivos de configuración.
+-->
+
+### Backend (pom.xml)
+
+| Dependencia | Grupo | Artifact | Versión |
+|-------------|-------|----------|---------|
+| Spring Boot Parent | org.springframework.boot | spring-boot-starter-parent | 3.4.4 (auth, eureka) / 3.4.5 (otros) |
+| Spring Cloud | org.springframework.cloud | spring-cloud-dependencies | 2024.0.1 |
+| PostgreSQL Driver | org.postgresql | postgresql | *runtime* (incluido en Boot) |
+| JWT | com.nimbusds | nimbus-jose-jwt | 9.37.3 |
+| Lombok | org.projectlombok | lombok | 1.18.30 |
+| SpringDoc OpenAPI | org.springdoc | springdoc-openapi-starter-webmvc-ui | 2.8.0 |
+
+:Dependencias Críticas del Backend (Maven)
+
+### Frontend (package.json)
+
+| Dependencia | Versión | Tipo |
+|:---|:---|:---|
+| next | 13.4.9 | dependency |
+| react | 18.2.0 | dependency |
+| react-dom | 18.2.0 | dependency |
+| typescript | 5.0.4 | dependency |
+| axios | 1.3.4 | dependency |
+| primereact | 10.2.1 | dependency |
+| primeicons | 6.0.1 | dependency |
+| primeflex | 3.3.0 | dependency |
+| chart.js | 4.3.2 | dependency |
+| quill | 1.3.7 | dependency |
+| @fullcalendar/react | 6.1.4 | dependency |
+| sass | 1.58.3 | devDependency |
+
+: Dependencias Clave del Frontend (npm)
+

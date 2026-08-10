@@ -1,0 +1,136 @@
+# Sección Introducción
+
+<!--
+  CAPÍTULO 1: Introducción al Proyecto
+  NO REQUIERE CÓDIGO - Se puede completar con información del PDF de titulación.
+  Describe el contexto, problemática y objetivos del sistema.
+-->
+
+\begin{importantbox}
+\textbf{Importante:} El sistema debe diseñarse para la infraestructura limitada de Sigchos (baja conectividad y dispositivos básicos). Implementar autenticación JWT y cifrado BCrypt es un prerrequisito innegociable para proteger los datos y la integridad transaccional global.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} Se adopta una arquitectura de microservicios modulares para digitalizar progresivamente el comercio local. Esto garantiza el desarrollo, despliegue y mantenimiento aislado de cada módulo, habilitando escalabilidad horizontal sin afectar servicios operativos.
+\end{infobox}
+
+## Contexto del Proyecto
+
+
+El Sistema de Comercio Electrónico para los Emprendimientos del Cantón Sigchos surge como respuesta a la necesidad de fortalecer el desarrollo económico local mediante la digitalización del comercio de los emprendedores de la zona.
+
+### Cantón Sigchos
+
+<!-- 
+  NOTA: Ampliar con información específica del cantón Sigchos del PDF.
+  Incluir datos demográficos, económicos y características relevantes.
+-->
+
+El cantón Sigchos, ubicado en la provincia de Cotopaxi, Ecuador, se caracteriza por:
+
+- Economía basada en emprendimientos locales
+- Producción artesanal y agrícola
+- Limitado acceso a canales de comercialización digital
+- Necesidad de visibilizar productos locales
+
+## Problemática
+
+
+<!-- 
+  PROBLEMÁTICA: Describir el problema que resuelve el sistema.
+  NO REQUIERE CÓDIGO - Información del documento de titulación.
+-->
+
+Los emprendimientos del cantón Sigchos enfrentan diversos desafíos:
+
+1. Limitada visibilidad: Los productos artesanales y agrícolas tienen alcance reducido
+2. Canales tradicionales: Dependencia de ferias y mercados físicos locales
+3. Acceso tecnológico: Falta de plataformas digitales adaptadas a sus necesidades
+4. Competitividad: Dificultad para competir con productos de otros sectores
+
+## Solución Propuesta
+
+
+El sistema de comercio electrónico proporciona una plataforma digital que permite:
+
+- Catálogo de productos: Exhibición digital con filtros por categorías y empresas
+- Gestión de usuarios: Sistema de autenticación JWT y autorización por roles
+- Gestión de inventario: Control de stock con trazabilidad de movimientos
+- Gestión de ventas: Seguimiento de pedidos con estados y reportes
+
+## Objetivos
+
+
+### Objetivo General
+
+Desarrollar un sistema de comercio electrónico basado en microservicios que facilite la promoción y comercialización de productos de los emprendimientos del cantón Sigchos.
+
+### Objetivos Específicos
+
+<!-- 
+  NOTA: Verificar y ampliar objetivos específicos del PDF de titulación.
+-->
+
+1. Identificar los requerimientos funcionales y no funcionales del sistema
+2. Diseñar una arquitectura de microservicios modular y escalable
+3. Implementar el sistema con:
+   - Gestión de productos, inventario, categorías y empresas
+   - Procesamiento de pagos en línea
+   - Seguimiento de pedidos
+4. Integrar los módulos y realizar pruebas funcionales y de usabilidad
+5. Garantizar seguridad mediante JWT, BCrypt y validaciones específicas
+6. Proporcionar interfaz web intuitiva con Next.js 13, TypeScript y PrimeReact
+
+## Alcance del Sistema
+
+
+### Funcionalidades Principales
+
+1. Gestión de Usuarios
+   - Registro público con rol automático de "cliente"
+   - Creación de usuarios por administrador (emprendedor/administrador)
+   - Autenticación y autorización con JWT
+   - Gestión de perfiles y roles
+
+2. Gestión de Catálogo de Productos y Carrito de Compras
+   - Catálogo público con filtros por categorías y empresas
+   - Carrito de compras con validación de stock en tiempo real
+   - Gestión de cantidades y cálculo automático de totales
+
+3. Gestión de Panel de Control para Emprendedor
+   - Gestión de productos (CRUD completo)
+   - Gestión de inventario (ajustes, movimientos, trazabilidad)
+   - Gestión de categorías
+   - Gestión de empresas
+   - Gestión de ventas (estados, reportes, historial)
+   - Visualización de estadísticas con gráficos
+
+4. Gestión de Panel Administrativo
+   - Todas las funciones del emprendedor
+   - Creación y gestión de usuarios con asignación de roles
+   - Supervisión global del sistema
+
+### Limitaciones
+
+<!-- 
+  NOTA: Especificar limitaciones conocidas del sistema.
+  Puede requerir revisión del código para detalles técnicos específicos.
+-->
+
+- El sistema se centra en la exhibición y gestión de productos (catálogo digital)
+- La gestión de pagos y transacciones puede estar fuera del alcance inicial
+- Limitado al ámbito geográfico del cantón Sigchos
+
+## Beneficiarios
+
+
+### Beneficiarios Directos
+
+- Emprendedores locales: Acceso a plataforma de promoción digital
+- Administradores: Herramientas de gestión centralizada
+
+### Beneficiarios Indirectos
+
+- Consumidores: Acceso a productos locales
+- Comunidad: Fortalecimiento de la economía local
+- Cantón Sigchos: Desarrollo tecnológico y económico

@@ -1,0 +1,169 @@
+# Sección Base de Datos
+
+\begin{importantbox}
+\textbf{Importante:} Respete estrictamente el patrón "Database per Service". Realizar JOINs entre bases de datos distintas viola la arquitectura irremediablemente. Las bases deben usar UTF-8 y en producción \texttt{hibernate.ddl-auto} debe ser \texttt{validate} o \texttt{none}.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} Cada esquema relacional (auth, productos, inventario, ventas) opera de forma completamente independiente. Este diseño modular permite futuras migraciones de módulos específicos hacia otros motores de datos sin afectar al ecosistema general.
+\end{infobox}
+
+El sistema implementa el patrón Database per Service. Cada microservicio gestiona su propia base de datos PostgreSQL.
+
+| Servicio | Base de Datos | Puerto (Local) |
+|---|---|---|
+| `msvc-auth` | `auth-service` | `5433` |
+| `msvc-producto` | `productos` | `5433` |
+| `msvc-inventario` | `inventario` | `5433` |
+| `msvc-ventas` | `ventas` | `5433` |
+
+: Asignación de Bases de Datos por Microservicio
+
+## Esquemas de Datos
+
+
+### Auth Service (`auth-service`)
+
+Gestiona usuarios y roles.
+
+Relaciones:
+*   1:N (Uno a Muchos): Un `Usuario` puede tener múltiples `Roles` asignados. Esto permite una granularidad de permisos flexible.
+
+```{mermaid}
+%%| fig-align: center
+
+erDiagram
+    usuarios ||--o{ usuario_roles : "roles"
+    usuarios {
+        bigint id PK
+        varchar username UK
+        varchar email UK
+        varchar password "BCrypt"
+        boolean activo
+    }
+    usuario_roles {
+        bigint usuario_id FK
+        varchar rol "ROLE_USER, ROLE_ADMIN"
+    }
+```
+::: {.center}
+Figura 4: Modelo ER Auth Service
+\addcontentsline{lof}{figure}{\protect\numberline{4}Modelo ER Auth Service}
+:::
+
+### Product Service (`productos`)
+
+Catálogo de productos organizado por categorías y empresas.
+
+Relaciones:
+*   1:N: Una `Categoría` agrupa múltiples `Productos`.
+*   1:N: Una `Empresa` puede tener múltiples `Productos` registrados. Esta relación soporta la funcionalidad multi-empresa del sistema.
+
+```{mermaid}
+erDiagram
+    categorias ||--o{ productos : "agrupa"
+    empresas ||--o{ productos : "provee"
+    productos {
+        bigint id PK
+        varchar nombre
+        decimal precio
+        bigint categoria_id FK
+        bigint empresa_id FK
+    }
+    categorias {
+        bigint id PK
+        varchar nombre
+        boolean activo
+    }
+    empresas {
+        bigint id PK
+        varchar nombre
+        varchar ruc UK
+    }
+```
+::: {.center}
+Figura 5: Modelo ER Product Service
+\addcontentsline{lof}{figure}{\protect\numberline{5}Modelo ER Product Service}
+:::
+
+### Inventory Service (`inventario`)
+
+Control de stock y trazabilidad.
+
+Relaciones:
+*   1:N: Un registro de `Inventario` mantiene un historial de múltiples `Movimientos`. Cada entrada o salida genera un registro inmutable para auditoría.
+
+```{mermaid}
+%%| fig-align: center
+
+erDiagram
+    inventarios ||--o{ movimientos : "historial"
+    inventarios {
+        bigint id PK
+        bigint producto_id UK "Ref Externa"
+        int quantity
+        varchar ubicacion
+    }
+    movimientos {
+        bigint id PK
+        bigint inventario_id FK
+        varchar tipo "ENTRADA, SALIDA"
+        int cantidad
+        varchar motivo
+    }
+```
+::: {.center}
+Figura 6: Modelo ER Inventory Service
+\addcontentsline{lof}{figure}{\protect\numberline{6}Modelo ER Inventory Service}
+:::
+
+### Sales Service (`ventas`)
+
+Transacciones y facturación.
+
+Relaciones:
+*   1:N: Un `Cliente` puede tener asociadas múltiples `Ventas` en su historial.
+*   1:N: Una `Venta` se compone de múltiples `Detalles` (ítems de la compra).
+
+```{mermaid}
+%%| fig-width: 8
+%%| fig-height: 7
+%%| fig-align: center
+
+erDiagram
+    clientes ||--o{ ventas : "realiza"
+    ventas ||--o{ detalles : "contiene"
+    ventas {
+        bigint id PK
+        varchar numero_factura UK
+        decimal total
+        varchar estado "PENDIENTE, COMPLETADA"
+    }
+    detalles {
+        bigint id PK
+        bigint producto_id "Ref Externa"
+        int cantidad
+        decimal subtotal
+    }
+    clientes {
+        bigint id PK
+        varchar email UK
+        varchar documento
+    }
+```
+::: {.center}
+Figura 7: Modelo ER Sales Service
+\addcontentsline{lof}{figure}{\protect\numberline{7}Modelo ER Sales Service}
+:::
+
+## Creación de Entorno
+
+
+Secuencia de inicialización para PostgreSQL:
+
+```sql
+CREATE DATABASE auth-service;
+CREATE DATABASE productos;
+CREATE DATABASE inventario;
+CREATE DATABASE ventas;
+```

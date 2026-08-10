@@ -1,0 +1,552 @@
+# Sección Mantenimiento y Soporte
+
+Este capítulo documenta los procedimientos de mantenimiento para el sistema en entorno de desarrollo local. No incluye configuraciones para ambientes de producción.
+
+\begin{importantbox}
+\textbf{Importante:} Proteja los endpoints de Actuator con autenticación. No modifique bases de datos ni descuente stock manualmente mediante SQL para mantener la inmutabilidad contable. Valide restauraciones periódicamente sin afectar producción y evite comandos pesados bajo carga.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} El análisis cruzado de logs entre Eureka y Circuit Breaker diagnostica la mayoría de fallas síncronas. Automatice en el futuro migraciones con Flyway e implemente Actuator como base para conectar Prometheus o Grafana y consolidar el monitoreo avanzado.
+\end{infobox}
+
+## Procedimientos de Mantenimiento
+
+### Mantenimiento Preventivo
+
+#### Bases de Datos
+
+Frecuencia: Mensual
+
+Tareas:
+
+```sql
+-- Actualizar estadísticas de PostgreSQL
+VACUUM ANALYZE;
+
+-- Verificar integridad de tablas
+SELECT tablename, last_vacuum, last_autovacuum, last_analyze, last_autoanalyze
+FROM pg_stat_user_tables;
+
+-- Limpiar logs antiguos (>30 días)
+DELETE FROM logs WHERE fecha < NOW() - INTERVAL '30 days';
+```
+
+#### Logs del Sistema
+
+Configuración actual (en `application.properties` de cada microservicio):
+
+```properties
+# Configuración de logging actual
+logging.level.org.springframework.web=WARN
+logging.level.root=WARN
+```
+
+Nota: El sistema NO tiene configuración de rotación de logs automática. Los logs se escriben a consola por defecto.
+
+Para desarrollo local, los logs se visualizan directamente en la terminal donde se ejecuta `mvn spring-boot:run`.
+
+#### Actualización de Dependencias
+
+Frecuencia: Trimestral
+
+```bash
+# Verificar versiones desactualizadas
+mvn versions:display-dependency-updates
+
+# Actualizar versiones en pom.xml
+# Ejecutar tests después de actualizar
+mvn clean test
+
+# Frontend
+cd avalon-react-10.1.0
+npm outdated
+npm update
+npm run build
+```
+
+
+### Mantenimiento Correctivo
+
+#### Reiniciar Microservicios en Desarrollo Local
+
+En Windows PowerShell / Linux / macOS:
+
+1. Detener el servicio: `Ctrl+C` en la terminal donde se está ejecutando
+2. Reiniciar:
+
+```bash
+# Eureka Server
+cd Microservicios/eureka-server
+mvn spring-boot:run
+
+# msvc-auth
+cd Microservicios/demo
+mvn spring-boot:run
+
+# msvc-producto
+cd Microservicios/msvc-producto
+mvn spring-boot:run
+
+# msvc-inventario
+cd Microservicios/msvc-inventario
+mvn spring-boot:run
+
+# msvc-ventas
+cd Microservicios/msvc-ventas
+mvn spring-boot:run
+```
+
+#### Limpiar Caché de Eureka
+
+Si los servicios no se descubren correctamente:
+
+```bash
+# 1. Detener Eureka Server (Ctrl+C en su terminal)
+
+# 2. Detener todos los microservicios (Ctrl+C en cada terminal)
+
+# 3. Reiniciar Eureka Server primero
+cd Microservicios/eureka-server
+mvn spring-boot:run
+
+# 4. Esperar 30 segundos
+
+# 5. Reiniciar los microservicios uno por uno
+```
+
+
+## Monitoreo del Sistema
+
+### Spring Boot Actuator
+
+NOTA IMPORTANTE: El proyecto actualmente NO tiene Spring Boot Actuator configurado.
+
+Para habilitar Actuator en producción, agregar en `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+Y configurar en `application.properties`:
+
+```properties
+# Habilitar endpoints de Actuator
+management.endpoints.web.exposure.include=health,info,metrics
+management.endpoint.health.show-details=when-authorized
+management.health.db.enabled=true
+management.server.port=9090
+```
+
+#### Endpoints de Health Check (Requiere Actuator)
+
+Una vez configurado Actuator, estarán disponibles:
+
+```bash
+# Verificar estado del servicio
+curl http://localhost:8081/actuator/health
+
+# Respuesta esperada
+{
+  "status": "UP",
+  "components": {
+    "db": {
+      "status": "UP",
+      "details": {
+        "database": "PostgreSQL",
+        "validationQuery": "isValid()"
+      }
+    },
+    "diskSpace": {
+      "status": "UP",
+      "details": {
+        "total": 500000000000,
+        "free": 300000000000,
+        "threshold": 10485760
+      }
+    },
+    "ping": {
+      "status": "UP"
+    }
+  }
+}
+```
+
+#### Métricas Disponibles (Con Actuator configurado)
+
+```bash
+# Métricas generales (requiere Actuator)
+curl http://localhost:8081/actuator/metrics
+
+# Métricas específicas
+curl http://localhost:8081/actuator/metrics/jvm.memory.used
+curl http://localhost:8081/actuator/metrics/http.server.requests
+curl http://localhost:8081/actuator/metrics/jdbc.connections.active
+```
+
+#### Configuración de Actuator (A implementar)
+
+Actualmente NO configurado. Para habilitarlo, agregar en `application.properties`:
+
+```properties
+# Habilitar endpoints de Actuator
+management.endpoints.web.exposure.include=health,info,metrics,env
+management.endpoint.health.show-details=when-authorized
+management.health.db.enabled=true
+```
+
+
+### Monitoreo de Base de Datos
+
+```sql
+-- Ver conexiones activas
+SELECT count(*) FROM pg_stat_activity WHERE state = 'active';
+
+-- Ver queries lentos
+SELECT pid, now() - pg_stat_activity.query_start AS duration, query 
+FROM pg_stat_activity 
+WHERE state = 'active' AND now() - pg_stat_activity.query_start > interval '5 seconds';
+
+-- Ver tamaño de bases de datos
+SELECT pg_database.datname, pg_size_pretty(pg_database_size(pg_database.datname)) AS size
+FROM pg_database
+ORDER BY pg_database_size(pg_database.datname) DESC;
+
+-- Ver tablas más grandes
+SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+FROM pg_tables
+WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+LIMIT 10;
+```
+
+
+### Monitoreo de Eureka
+
+Dashboard: http://localhost:8761
+
+Verificar que todos los servicios estén registrados y en estado `UP`:
+
+- login (1 instance)
+- msvc-producto (1 instance)
+- msvc-inventario (1 instance)
+- msvc-ventas (1 instance)
+
+
+## Troubleshooting
+
+### Problema: Microservicio no inicia
+
+Síntomas:
+
+- Error al ejecutar `mvn spring-boot:run`
+- Excepción en consola
+
+Diagnóstico:
+
+```bash
+# Verificar puerto no esté en uso
+netstat -ano | findstr :8081  # Windows
+lsof -i :8081                  # Linux/macOS
+
+# Verificar logs
+tail -f logs/spring.log
+
+# Verificar conexión a base de datos
+psql -U postgres -h localhost -p 5433 -d productos
+```
+
+Soluciones:
+
+1. Puerto ocupado:
+   ```bash
+   # Cambiar puerto en application.properties
+   server.port=8085
+   ```
+
+2. Error de conexión a BD:
+   ```bash
+   # Verificar PostgreSQL corriendo
+   sudo systemctl status postgresql  # Linux
+   # Verificar credenciales en application.properties
+   ```
+
+3. Eureka no disponible:
+   ```bash
+   # Iniciar primero Eureka Server
+   cd eureka-server
+   mvn spring-boot:run
+   ```
+
+
+### Problema: Error 500 en endpoint
+
+Síntomas:
+
+- Response HTTP 500 Internal Server Error
+- Excepción en logs del microservicio
+
+Diagnóstico:
+
+```bash
+# Ver logs en tiempo real
+tail -f logs/msvc-producto.log
+
+# Buscar stack trace
+grep -A 20 "Exception" logs/msvc-producto.log
+```
+
+Causas comunes:
+
+1. NullPointerException:
+   - Validar datos de entrada
+   - Verificar relaciones entre entidades
+
+2. Constraint violation (BD):
+   - Revisar reglas de integridad referencial
+   - Verificar datos duplicados
+
+3. Feign client error:
+   - Verificar que microservicio destino esté activo
+   - Revisar configuración de Circuit Breaker
+
+
+### Problema: Autenticación falla
+
+Síntomas:
+
+- Error 401 Unauthorized
+- Token JWT inválido
+
+Diagnóstico:
+
+```bash
+# Verificar token en jwt.io
+# Copiar token y pegar en https://jwt.io
+
+# Verificar expiración
+curl -X POST http://localhost:8080/api/auth/validate \
+  -H "Content-Type: application/json" \
+  -d '{"token": "eyJ..."}'
+```
+
+Soluciones:
+
+1. Token expirado:
+   - Solicitar nuevo token con POST /api/auth/login
+
+2. Clave RSA cambió:
+   - Reiniciar msvc-auth (genera nuevas claves RSA en cada inicio)
+   - Solicitar nuevo token
+
+3. Usuario inactivo:
+   ```sql
+   -- Reactivar usuario
+   UPDATE usuario SET activo = true WHERE id = 1;
+   ```
+
+
+### Problema: Stock no se actualiza
+
+Síntomas:
+
+- Venta se crea pero inventario no disminuye
+- Error en comunicación Feign
+
+Diagnóstico:
+
+```bash
+# Verificar msvc-inventario está activo
+curl http://localhost:8082/actuator/health
+
+# Verificar en Eureka
+curl http://localhost:8761/eureka/apps/msvc-inventario
+
+# Ver logs de msvc-ventas
+grep "InventarioClient" logs/msvc-ventas.log
+```
+
+Soluciones:
+
+1. Microservicio caído:
+   ```bash
+   cd msvc-inventario
+   mvn spring-boot:run
+   ```
+
+2. Circuit Breaker abierto:
+   - Esperar a que se cierre automáticamente
+   - Reiniciar msvc-ventas
+
+3. Actualización manual:
+   ```sql
+   UPDATE inventario 
+   SET cantidad = cantidad - 5 
+   WHERE producto_id = 10;
+   ```
+
+
+### Problema: Pago con Kushki falla
+
+Síntomas:
+
+- Error 400 al crear venta
+- Mensaje: "Error procesando pago"
+
+Diagnóstico:
+
+```bash
+# Verificar logs de pago
+grep "Kushki" logs/msvc-ventas.log
+
+# Verificar credenciales de Kushki
+echo $KUSHKI_PUBLIC_KEY
+echo $KUSHKI_PRIVATE_KEY
+```
+
+Soluciones:
+
+1. Credenciales incorrectas:
+   - Verificar llaves en application.properties o variables de entorno
+
+2. Ambiente de prueba vs producción:
+   - Usar llaves de sandbox para testing
+   - Usar llaves de producción en prod
+
+3. Token inválido:
+   - Regenerar token desde frontend con Kushki.js
+
+
+### Problema: CORS errors en frontend
+
+Síntomas:
+
+- Error en consola del navegador: "CORS policy: No 'Access-Control-Allow-Origin'"
+
+Solución:
+
+Verificar configuración CORS en cada controller:
+
+```java
+@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"})
+```
+
+Para producción, añadir dominio real:
+
+```java
+@CrossOrigin(origins = {
+    "http://localhost:3000", 
+    "https://sigchos.gob.ec"
+})
+```
+
+
+## Respaldo y Recuperación Local
+
+### Respaldo Manual de Bases de Datos
+
+Para desarrollo local, realizar respaldos manuales cuando sea necesario:
+
+```bash
+# Windows PowerShell / Linux / macOS
+# Crear directorio para respaldos
+mkdir backups
+cd backups
+
+# Respaldar cada base de datos (puerto 5433)
+pg_dump -U postgres -h localhost -p 5433 auth-service > auth-service-backup.sql
+pg_dump -U postgres -h localhost -p 5433 productos > productos-backup.sql
+pg_dump -U postgres -h localhost -p 5433 inventario > inventario-backup.sql
+pg_dump -U postgres -h localhost -p 5433 ventas > ventas-backup.sql
+
+echo "Respaldo completado"
+```
+
+Nota: No se requiere automatización con cron para desarrollo local.
+
+
+### Restauración de Base de Datos
+
+```bash
+# Restaurar desde respaldo (puerto 5433)
+psql -U postgres -h localhost -p 5433 -d productos < productos-backup.sql
+
+# Verificar datos restaurados
+psql -U postgres -h localhost -p 5433 -d productos -c "SELECT COUNT(*) FROM productos;"
+```
+
+
+### Respaldo de Código Fuente
+
+Repositorio Git: https://github.com/BrayanDaniel/TrabajoTitulacion
+
+```bash
+# Clonar repositorio
+git clone https://github.com/BrayanDaniel/TrabajoTitulacion.git
+
+# Crear respaldo local
+tar -czf sigchos-ecommerce-backup-$(date +%Y-%m-%d).tar.gz TrabajoTitulacion/
+```
+
+
+## Actualizaciones del Sistema en Desarrollo Local
+
+### Actualizar Código desde Repositorio
+
+```bash
+# 1. Detener todos los servicios (Ctrl+C en cada terminal)
+
+# 2. Actualizar código
+git pull origin main
+
+# 3. Recompilar microservicios
+cd Microservicios/msvc-producto
+mvn clean package
+
+# 4. Reiniciar servicios
+mvn spring-boot:run
+```
+
+
+### Migración de Base de Datos
+
+Para cambios en esquema de BD, usar Flyway o Liquibase (no implementado actualmente).
+
+Migración manual:
+
+```sql
+-- Ejemplo: Añadir columna a tabla producto
+ALTER TABLE producto ADD COLUMN descuento DECIMAL(5,2) DEFAULT 0.00;
+
+-- Verificar
+\d producto
+```
+
+Rollback:
+
+```sql
+ALTER TABLE producto DROP COLUMN descuento;
+```
+
+
+## Contacto y Soporte
+
+### Equipo de Desarrollo
+
+- Desarrollador Principal: Brayan Daniel Patiño
+- Contacto: WhatsApp
+- Repositorio: https://github.com/BrayanDaniel/TrabajoTitulacion
+
+### Municipio de Sigchos
+
+- Institución: GAD Municipal del Cantón Sigchos
+- Provincia: Cotopaxi, Ecuador
+
+### Documentación Adicional
+
+- Manual Técnico (este documento)
+- Manual de Usuario
+- README.md del proyecto

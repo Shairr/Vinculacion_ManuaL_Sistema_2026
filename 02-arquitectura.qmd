@@ -1,0 +1,271 @@
+# Sección Arquitectura del Sistema
+
+\begin{importantbox}
+\textbf{Importante:} Aplicar estrictamente el patrón "Database per Service" y evitar compartir esquemas para no comprometer la descentralización. Es crítico proteger la clave RSA de msvc-auth y evitar que Eureka Server sea un punto único de fallo en producción.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} La arquitectura emplea microservicios independientes que se comunican síncronamente vía REST y OpenFeign. Esto centraliza la seguridad con JWT y delega el enrutamiento a Eureka, logrando alta escalabilidad, independencia funcional y tolerancia a fallos parciales.
+\end{infobox}
+
+## Visión General
+
+El sistema implementa una arquitectura de microservicios descentralizada, donde cada módulo funcional (Autenticación, Productos, Inventario, Ventas) opera como un servicio independiente con su propia base de datos.
+
+### Principios Fundamentales
+1. Database per Service: Aislamiento total de datos; cada servicio gestiona su propio esquema.
+2. Comunicación REST & Feign: Interacción síncrona mediante HTTP y clientes declarativos.
+3. Seguridad Centralizada: Tokenización JWT mediante un servidor de autorización dedicado.
+4. Service Discovery: Registro dinámico de instancias para escalabilidad y balanceo de carga.
+
+## Diagrama de Arquitectura
+
+El siguiente gráfico ilustra la interacción entre el cliente web, los servicios de backend y los componentes de persistencia.
+
+```{mermaid}
+%%| fig-width: 6.5
+%%| fig-height: 7
+
+graph TB
+    Client["<b>Cliente Web</b><br/>Next.js 13<br/>Puerto: 3000"]
+    
+    subgraph Services["<b>⚙️ CAPA DE SERVICIOS</b>"]
+        Eureka["<b>Service Discovery</b><br/>Eureka Server<br/>Puerto: 8761"]
+        Auth["<b>msvc-auth</b><br/>Autenticación<br/>Puerto: 8080"]
+        Prod["<b>msvc-producto</b><br/>Catálogo/Empresas<br/>Puerto: 8081"]
+        Inv["<b>msvc-inventario</b><br/>Stock/Logística<br/>Puerto: 8082"]
+        Sales["<b>msvc-ventas</b><br/>Facturación/Clientes<br/>Puerto: 8083"]
+    end
+    
+    subgraph Data["<b>🗄️ PERSISTENCIA (PostgreSQL :5433)</b>"]
+        DB1[("<b>auth-db</b>")]
+        DB2[("<b>productos-db</b>")]
+        DB3[("<b>inventario-db</b>")]
+        DB4[("<b>ventas-db</b>")]
+    end
+    
+    subgraph External["<b>🌐 EXTERNO</b>"]
+        Kushki["<b>Kushki API</b><br/>Pasarela Pagos"]
+    end
+    
+    %% Relaciones Cliente -> Servicios
+    Client -->|"REST /api/auth"| Auth
+    Client -->|"REST /api/productos"| Prod
+    Client -->|"REST /api/inventarios"| Inv
+    Client -->|"REST /api/ventas"| Sales
+    
+    %% Registro en Eureka
+    Auth -.->|"Registro"| Eureka
+    Prod -.->|"Registro"| Eureka
+    Inv -.->|"Registro"| Eureka
+    Sales -.->|"Registro"| Eureka
+    
+    %% Comunicación entre microservicios (Feign)
+    Sales -->|"Feign: Validar Stock"| Inv
+    Sales -->|"Feign: Info Producto"| Prod
+    Prod <-->|"Feign: Sync Stock"| Inv
+    
+    %% Persistencia
+    Auth --> DB1
+    Prod --> DB2
+    Inv --> DB3
+    Sales --> DB4
+    
+    %% Integración
+    Sales -->|"HTTPS"| Kushki
+    
+    %% Estilos
+    classDef client fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef discovery fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#000
+    classDef auth fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
+    classDef service fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef db fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000
+    classDef ext fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    
+    class Client client
+    class Eureka discovery
+    class Auth auth
+    class Prod,Inv,Sales service
+    class DB1,DB2,DB3,DB4 db
+    class Kushki ext
+```
+
+::: {.center}
+Figura 1: Diagrama General de la Arquitectura de Microservicios
+\addcontentsline{lof}{figure}{\protect\numberline{1}Diagrama General de la Arquitectura de Microservicios}
+:::
+
+## Componentes del Sistema
+
+### Service Discovery (`eureka-server`)
+Tecnología: Spring Cloud Netflix Eureka  
+Puerto: `8761`
+
+Actúa como el DNS interno del sistema. Todos los microservicios se registran aquí al iniciarse.
+- Función: Permite que `msvc-ventas` encuentre a `msvc-inventario` usando su nombre lógico (`MSVC-INVENTARIO`) en lugar de IPs fijas.
+- Configuración: Modo standalone (`fetch-registry=false`, `register-with-eureka=false`).
+
+### Autenticación (`msvc-auth`)
+Tecnología: Spring Security, OAuth2, JWT, BCrypt  
+Puerto: `8080`
+
+Servidor de identidad centralizado.
+- Responsabilidad: Emitir tokens JWT firmados (RSA-256) tras validar credenciales.
+- Roles: Gestiona los permisos `ROLE_USER` (Clientes), `ROLE_EMP` (Emprendedores) y `ROLE_ADMIN`.
+- Datos: Almacena usuarios y sus roles en la base `auth-service`.
+
+### Producto (`msvc-producto`)
+Tecnología: Spring Boot, OpenFeign  
+Puerto: `8081`
+
+Core del comercio electrónico.
+- Responsabilidad: Gestiona el catálogo, categorías y la información de las empresas/emprendimientos.
+- Interacción: Cuando se crea un producto, notifica a `msvc-inventario` para inicializar el stock en 0.
+
+### Inventario (`msvc-inventario`)
+Tecnología: Spring Boot, JPA  
+Puerto: `8082`
+
+Control logístico.
+- Responsabilidad: Mantiene el conteo físico de productos y el historial de movimientos (Entradas, Salidas, Ajustes).
+- Lógica: Implementa validaciones estrictas (no permite stock negativo). Recibe peticiones de `msvc-ventas` para reservar/descontar items.
+
+### Ventas (`msvc-ventas`)
+Tecnología: Spring Boot, Integración Kushki  
+Puerto: `8083`
+
+Orquestador de transacciones.
+- Responsabilidad: Coordina el proceso de compra.
+- Integración y Flujo: 
+    1. Verifica precios con `msvc-producto`.
+    2. Verifica disponibilidad con `msvc-inventario`.
+    3. Procesa el pago con la pasarela externa Kushki.
+    4. Confirma el descuento de stock.
+
+## Comunicación Inter-Servicios
+
+El sistema utiliza Spring Cloud OpenFeign para la comunicación síncrona entre servicios. A continuación se detallan los contratos de interfaz principales.
+
+### Integración Producto - Inventario
+Cuando se crea un producto, automáticamente se crea su registro de inventario.
+
+```java
+// En msvc-producto
+@FeignClient(name = "msvc-inventario")
+public interface InventarioClient {
+    @PostMapping("/api/inventarios/producto/{productoId}")
+    InventarioInfoDto crearInventarioParaProducto(
+        @PathVariable("productoId") Long productoId,
+        @RequestParam("stock") Integer stock
+    );
+}
+```
+
+### Integración Ventas - Stock
+Durante el proceso de checkout, Ventas bloquea y descuenta el stock.
+
+```java
+// En msvc-ventas
+@FeignClient(name = "msvc-inventario")
+public interface InventarioClient {
+    @PostMapping("/api/inventarios/salida-lote")
+    List<InventarioInfoDto> procesarSalidaLote(@RequestBody SalidaInventarioLoteRequestDto request);
+}
+```
+
+## Flujos Principales del Negocio
+
+### 1. Flujo de Autenticación
+Este proceso describe cómo un usuario obtiene acceso seguro al sistema.
+
+1. El cliente envía `username` y `password` a `/auth/login`.
+2. `msvc-auth` valida el hash BCrypt contra la base de datos.
+3. Si es correcto, genera un JWT firmado con la clave privada RSA.
+4. El cliente almacena este token y lo envía en el header `Authorization` de futuras peticiones.
+
+```{mermaid}
+%%| fig-width: 6.5
+%%| fig-align: center
+
+sequenceDiagram
+    participant C as Cliente Web
+    participant A as msvc-auth
+    participant DB as DB Auth
+    
+    Note over C, A: Inicio de Sesión
+    C->>A: POST /auth/login
+    activate A
+    A->>DB: Buscar usuario
+    DB-->>A: Hash contraseña & Roles
+    A->>A: Validar Hash (BCrypt)
+    A->>A: Generar Token (RSA Sign)
+    A-->>C: 200 OK {access_token: "ey..."}
+    deactivate A
+```
+
+::: {.center}
+Figura 2: Diagrama de Secuencia - Proceso de Autenticación
+\addcontentsline{lof}{figure}{\protect\numberline{2}Diagrama de Secuencia - Proceso de Autenticación}
+:::
+
+### 2. Flujo de Proceso de Venta (Checkout)
+Describe la orquestación crítica entre tres microservicios y una pasarela de pago.
+
+1. Inicio: Cliente confirma carrito de compras.
+2. Validación: `msvc-ventas` consulta a `msvc-producto` para obtener precios actuales (evita manipulación frontend).
+3. Verificación Stock: Consulta a `msvc-inventario` si hay cantidad suficiente.
+4. Pago: Envía token de pago a Kushki.
+5. Finalización: Si el pago es exitoso, ordena a `msvc-inventario` descontar el stock (Salida por Venta) y guarda la factura.
+
+```{mermaid}
+%%| fig-width: 6.5
+%%| fig-align: center
+
+sequenceDiagram
+    participant C as Cliente
+    participant V as msvc-ventas
+    participant P as msvc-producto
+    participant I as msvc-inventario
+    participant K as Kushki Gateway
+
+    C->>V: POST /ventas (Carrito)
+    activate V
+    
+    loop Por cada item
+        V->>P: GET /productos/{id}
+        P-->>V: Precio actual y Nombre
+        
+        V->>I: GET /inventarios/stock/{id}
+        I-->>V: Stock disponible
+    end
+    
+    Note right of V: Validación Exitosa
+
+    V->>K: Procesar Pago (Tarjeta)
+    activate K
+    K-->>V: Transacción Aprobada
+    deactivate K
+    
+    V->>I: POST /inventarios/salida-lote
+    activate I
+    Note right of I: Reducción Atómica
+    I-->>V: Nuevo Stock Confirmado
+    deactivate I
+    
+    V->>V: Generar Factura
+    V-->>C: 201 Venta Exitosa
+    deactivate V
+```
+
+::: {.center}
+Figura 3: Diagrama de Secuencia - Proceso de Checkout y Pago
+\addcontentsline{lof}{figure}{\protect\numberline{3}Diagrama de Secuencia - Proceso de Checkout y Pago}
+:::
+
+## Estrategias de Resiliencia
+
+El sistema está diseñado para tolerar fallos parciales:
+
+1. Circuit Breaker: Implementado en Feign Clients. Si `msvc-inventario` cae, `msvc-producto` maneja la excepción (`InventarioClientFallback`) para no detener la visualización del catálogo (aunque no muestre stock).
+2. Referencias Débiles: Los servicios no usan Foreign Keys a nivel de base de datos entre microservicios. Se relacionan por IDs lógicos (ej. `producto_id` en inventario es solo un número `Long`), permitiendo que las bases de datos evolucionen o se muevan independientemente.
+3. Health Checks: Eureka monitorea cada instancia cada 30 segundos.

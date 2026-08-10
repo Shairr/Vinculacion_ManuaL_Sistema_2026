@@ -1,0 +1,202 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "Manual Técnico"
+  subtitle: "Sistema de Comercio Electrónico para los Emprendimientos del Cantón Sigchos"
+  author: 
+    - name: "Darwin Panchez"
+  date: today
+  date-format: "D MMMM YYYY"
+  cover-image: "imagenes/sigchos1.png"
+  
+  # Capítulos del manual
+  chapters:
+    - index.qmd
+    - 01-introduccion.qmd
+    - 02-arquitectura.qmd
+    - 03-tecnologias.qmd
+    - 04-microservicios.qmd
+    - 05-base-datos.qmd
+    - 06-seguridad.qmd
+    - 07-apis-rest.qmd
+    - 08-despliegue.qmd
+    - 09-mantenimiento.qmd
+    - 10-pasarela-payphone.qmd
+    - referencias.qmd
+
+format:
+  html:
+    theme: 
+      light: [cosmo, custom.scss]
+    page-layout: article
+    toc: true
+    toc-depth: 3
+    toc-location: right
+    number-sections: true
+    code-fold: false
+    code-tools: true
+    css: custom.scss
+    include-after-body:
+      text: |
+        <div style="position: fixed; bottom: 60px; right: 270px; z-index: 50;">
+          <img src="imagenes/sigchos1.png" alt="GAD Municipal del Cantón Sigchos" style="height: 60px; opacity: 0.8; max-width: 100%;">
+        </div>
+  pdf:
+    documentclass: book
+    classoption: [openany]
+    papersize: letter
+    titlepage: false
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    colorlinks: true
+    linkcolor: black
+    urlcolor: black
+    citecolor: black
+    toccolor: black
+    geometry:
+      - top=4.0cm
+      - bottom=3.0cm
+      - left=2.54cm
+      - right=2.54cm
+      - headheight=2.5cm
+      - headsep=0.8cm
+      - footskip=1.2cm
+    linestretch: 1.5
+    mainfont: "Times New Roman"
+    fontsize: 12pt
+    code-block-bg: "#f5f5f5"
+    code-block-border-left: "#31c090"
+    fig-align: center
+    fig-pos: "H"
+    tbl-cap-location: bottom
+    fig-cap-location: bottom
+    include-in-header:
+      text: |
+        \usepackage{tikz}
+        \usepackage{lastpage}
+        \usepackage{fancyhdr}
+        \usepackage{graphicx}
+        \usepackage{xcolor}
+        \usepackage{tabularx}
+        \usepackage{emptypage}
+        \usepackage{array}
+        \usepackage{float}
+        \usepackage{fontspec}
+        \usepackage{multirow}
+        \usepackage{makecell}
+        \definecolor{municipioVerde}{RGB}{49,192,144}
+        \AtBeginDocument{\renewcommand{\maketitle}{}}
+
+        % === FUENTE TIMES NEW ROMAN ===
+        \setmainfont{Times New Roman}
+
+        % === ALINEACIÓN A LA IZQUIERDA (sin justificar) ===
+        \usepackage[document]{ragged2e}
+
+        % === TABLA DE CONTENIDOS: texto negro y alineado a la izquierda ===
+        \usepackage{tocloft}
+        \tocloftpagestyle{empty}
+        \setlength{\cftbeforetoctitleskip}{-2.5cm}
+        \renewcommand{\cfttoctitlefont}{\bfseries\Large\color{black}}
+        \renewcommand{\cftchapfont}{\color{black}\bfseries}
+        \renewcommand{\cftchappagefont}{\color{black}}
+        \renewcommand{\cftsecfont}{\color{black}}
+        \renewcommand{\cftsecpagefont}{\color{black}}
+        \renewcommand{\cftsubsecfont}{\color{black}}
+        \renewcommand{\cftsubsecpagefont}{\color{black}}
+        \renewcommand{\cftchapleader}{\cftdotfill{\cftdotsep}}
+
+
+        % === IMÁGENES: centradas y del mismo tamaño ===
+        \usepackage{etoolbox}
+        \usepackage[export]{adjustbox}
+        \let\oldincludegraphics\includegraphics
+        \renewcommand{\includegraphics}[2][]{\oldincludegraphics[max width=\textwidth, max height=0.80\textheight, keepaspectratio, #1]{#2}}
+        \AtBeginEnvironment{figure}{
+          \let\oldincludegraphics\includegraphics
+          \renewcommand{\includegraphics}[2][]{\oldincludegraphics[width=14cm, height=8cm, keepaspectratio=false, #1]{#2}}
+        }
+
+        % === CENTRAR CAPTIONS DE FIGURAS ===
+        \usepackage[center]{caption}
+
+        % === CÓDIGOS: no sobrepasar los límites del cuadro ===
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{
+          breaklines=true,
+          breakanywhere=true,
+          commandchars=\\\{\},
+          fontsize=\small
+        }
+
+        % === ELIMINAR todas las líneas horizontales de \rule en el cuerpo ===
+        % (Quarto genera \strut\rule{} para los --- de markdown)
+
+        % === TÍTULOS: línea decorativa horizontal SOLO en capítulos ===
+        \usepackage{titlesec}
+        \titleformat{\chapter}[block]
+          {\normalfont\LARGE\bfseries}
+          {\thechapter.}
+          {0.5em}
+          {}
+          [\vspace{0.5ex}\titlerule]
+        % === Eliminar espacio en blanco superior ===
+        \titlespacing*{\chapter}{0pt}{-10pt}{15pt}
+        \titleformat{\section}[block]
+          {\normalfont\Large\bfseries}
+          {\thesection}
+          {1em}
+          {}
+        \titleformat{\subsection}[block]
+          {\normalfont\large\bfseries}
+          {\thesubsection}
+          {1em}
+          {}
+        \titleformat{\subsubsection}[block]
+          {\normalfont\normalsize\bfseries}
+          {\thesubsubsection}
+          {1em}
+          {}
+
+        % === Eliminar border-bottom de headings (que genera Quarto) ===
+        \titlespacing*{\section}{0pt}{3.5ex plus 1ex minus .2ex}{2.3ex plus .2ex}
+        \titlespacing*{\subsection}{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+        \titlespacing*{\subsubsection}{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+
+
+        % === CAJAS DE INFORMACIÓN E IMPORTANTE ===
+        \usepackage[many]{tcolorbox}
+        \usepackage{fontawesome5}
+        \definecolor{infobg}{HTML}{e6f2ff}
+        \definecolor{espeblue}{HTML}{00529b}
+        \definecolor{importbg}{HTML}{fff8e6}
+        \definecolor{espeyellow}{HTML}{ffc107}
+        \newcommand{\iconInfo}{\textcolor{espeblue}{\faInfoCircle}}
+        \newcommand{\iconImportant}{\textcolor{espeyellow}{\faExclamationTriangle}}
+
+        \tcbuselibrary{skins,breakable}
+
+        \newtcolorbox{infobox}{
+          colback=infobg, colframe=espeblue,
+          leftrule=4pt, rightrule=0pt, toprule=0pt, bottomrule=0pt,
+          left=6pt, right=6pt, top=4pt, bottom=4pt,
+          breakable,
+          before upper={\iconInfo\enspace},
+          fontupper=\small
+        }
+
+        \newtcolorbox{importantbox}{
+          colback=importbg, colframe=espeyellow,
+          leftrule=4pt, rightrule=0pt, toprule=0pt, bottomrule=0pt,
+          left=6pt, right=6pt, top=4pt, bottom=4pt,
+          breakable,
+          before upper={\iconImportant\enspace},
+          fontupper=\small
+        }
+    include-before-body: 
+      - portada.tex
+      - header.tex
+lang: es

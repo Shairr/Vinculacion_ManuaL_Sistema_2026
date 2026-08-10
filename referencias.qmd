@@ -1,0 +1,158 @@
+# Documentación Oficial
+
+<!--
+  REFERENCIAS: Sección de bibliografía y recursos adicionales.
+  NO REQUIERE CÓDIGO - Se puede completar con documentación técnica general.
+-->
+
+## Frameworks y Librerías
+
+Spring Framework
+
+- Spring Boot Documentation: <https://spring.io/projects/spring-boot>
+- Spring Security Reference: <https://docs.spring.io/spring-security/reference/>
+- Spring Data JPA: <https://spring.io/projects/spring-data-jpa>
+- Spring Cloud Netflix Eureka: <https://spring.io/projects/spring-cloud-netflix>
+
+Frontend
+
+- Next.js Documentation: <https://nextjs.org/docs>
+- React Documentation: <https://react.dev/>
+- React Hooks API: <https://react.dev/reference/react>
+
+Base de Datos
+
+- PostgreSQL Documentation: <https://www.postgresql.org/docs/>
+- PostgreSQL Tutorial: <https://www.postgresqltutorial.com/>
+
+## Seguridad
+
+JWT (JSON Web Tokens)
+
+- JWT Introduction: <https://jwt.io/introduction>
+- RFC 7519 - JWT Standard: <https://datatracker.ietf.org/doc/html/rfc7519>
+
+BCrypt
+
+- BCrypt Wikipedia: <https://en.wikipedia.org/wiki/Bcrypt>
+- Spring Security Password Encoding: <https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html>
+
+## Arquitectura de Microservicios
+
+Libros
+
+- Richardson, C. (2018). *Microservices Patterns*. Manning Publications.
+- Newman, S. (2015). *Building Microservices*. O'Reilly Media.
+
+Artículos y Guías
+
+- Martin Fowler - Microservices: <https://martinfowler.com/articles/microservices.html>
+- 12 Factor App: <https://12factor.net/>
+- Microservices Architecture (Microsoft): <https://docs.microsoft.com/en-us/azure/architecture/guide/architecture-styles/microservices>
+
+## Herramientas
+
+Build y Gestión de Dependencias
+
+- Apache Maven: <https://maven.apache.org/>
+- npm Documentation: <https://docs.npmjs.com/>
+
+Control de Versiones
+
+- Git Documentation: <https://git-scm.com/doc>
+- GitHub Guides: <https://guides.github.com/>
+
+## APIs REST
+
+Estándares y Mejores Prácticas
+
+- RESTful API Design - Best Practices: <https://restfulapi.net/>
+- HTTP Status Codes: <https://httpstatuses.com/>
+- OpenAPI Specification: <https://swagger.io/specification/>
+
+Testing
+
+- Postman Documentation: <https://learning.postman.com/docs/>
+- cURL Documentation: <https://curl.se/docs/>
+
+## Recursos de Aprendizaje
+
+Tutoriales Oficiales
+
+- Spring Boot Guides: <https://spring.io/guides>
+- Next.js Learn: <https://nextjs.org/learn>
+- PostgreSQL Tutorial: <https://www.postgresqltutorial.com/>
+
+Comunidades
+
+- Stack Overflow: <https://stackoverflow.com/>
+- Spring Community Forums: <https://spring.io/community>
+- Reddit - r/SpringBoot: <https://www.reddit.com/r/SpringBoot/>
+- Reddit - r/reactjs: <https://www.reddit.com/r/reactjs/>
+
+## Documentación del Proyecto
+
+Repositorio GitHub
+
+- Código Fuente: <https://github.com/BrayanDaniel/TrabajoTitulacion>
+- Licencia: Trabajo de Titulación - GAD Municipal del Cantón Sigchos
+- Autor: Darwin Brayan Daniel Patiño
+- Año: 2024-2025
+
+Estructura del Repositorio:
+
+- `Microservicios/` - Código fuente de los microservicios backend (Spring Boot)
+  - `eureka-server/` - Servidor de descubrimiento de servicios
+  - `demo/` (msvc-auth) - Autenticación y gestión de usuarios
+  - `msvc-producto/` - Gestión de productos, empresas y categorías
+  - `msvc-inventario/` - Gestión de inventario y movimientos
+  - `msvc-ventas/` - Gestión de ventas y clientes
+- `avalon-react-10.1.0/` - Aplicación frontend (Next.js + React + TypeScript)
+- `README.md` - Instrucciones de instalación y ejecución
+
+Instrucciones de Instalación (del README.md):
+
+1. Importar los archivos .sql en PostgreSQL
+2. Correr el servicio de Eureka-Server
+3. Correr todos los microservicios
+4. Abrir http://localhost:8761 (Eureka dashboard)
+5. Verificar que estén los cuatro microservicios corriendo correctamente
+6. Instalar dependencias en el frontend: `npm install`
+7. Correr el frontend con: `npm run start`
+- Issues/Bugs: *(Agregar URL de issues)*
+- Wiki del Proyecto: *(Si existe)*
+
+Documentos Relacionados
+
+- Manual de Usuario: Ver manual de usuario del sistema
+- Informe de Titulación: "PATIÑO_BRAYAN_TRABAJO_TITULACIÓN (2).pdf"
+- Reporte Técnico de Tecnologías: "REPORTE TÉCNICO DE TECNOLOGÍAS.pdf"
+
+## Glosario de Términos
+
+| Término | Definición |
+|---------|----------|
+| API | Application Programming Interface - Interfaz para comunicación entre sistemas |
+| BCrypt | Algoritmo de hash para encriptar contraseñas |
+| CORS | Cross-Origin Resource Sharing - Control de acceso entre dominios |
+| DTO | Data Transfer Object - Objeto para transferencia de datos |
+| Eureka | Servidor de descubrimiento de servicios de Netflix OSS |
+| JPA | Java Persistence API - API para persistencia de datos en Java |
+| JWT | JSON Web Token - Estándar de tokens de autenticación |
+| Microservicio | Servicio independiente con responsabilidad única |
+| ORM | Object-Relational Mapping - Mapeo objeto-relacional |
+| REST | Representational State Transfer - Arquitectura para APIs web |
+| Spring Boot | Framework de Java para desarrollo rápido de aplicaciones |
+| SSR | Server-Side Rendering - Renderizado del lado del servidor |
+
+## Licencia
+
+<!--
+  LICENCIA: Especificar la licencia del proyecto
+-->
+
+Este proyecto fue desarrollado como trabajo de titulación. Consultar con los autores para términos de uso y distribución.
+
+Última actualización: `r Sys.Date()`
+
+Versión del documento: 1.0

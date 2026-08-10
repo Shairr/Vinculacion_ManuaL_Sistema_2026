@@ -1,0 +1,150 @@
+# Sección Microservicios
+
+\begin{importantbox}
+\textbf{Importante:} Los puertos asignados y nombres registrados en Eureka son contratos inamovibles. Eureka debe iniciarse antes que cualquier microservicio. Nunca almacene datos de tarjetas de crédito localmente; delegue el cumplimiento PCI-DSS íntegramente a Kushki.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} La arquitectura de cinco microservicios (Eureka, Auth, Product, Inventory, Sales) sigue diseño RESTful con aislamiento estricto de puertos e identidad centralizada. Esto garantiza alta cohesión interna, bajo acoplamiento y operaciones atómicas para mantener la integridad.
+\end{infobox}
+
+## Detalles de Sistema
+
+Este capítulo detalla la especificación técnica de los 5 microservicios del backend, definiendo sus responsabilidades, persistencia y puntos de acceso (endpoints).
+
+
+## Service Discovery (Eureka)
+
+Puerto: `8761` Tecnología: Netflix Eureka Server
+
+### Responsabilidades
+*   Registro de Servicios: Catálogo dinámico de instancias activas.
+*   Heartbeat: Monitoreo de salud de los servicios (cada 30s).
+*   Resolución DNS Interna: Permite llamar a servicios por nombre (ej. `msvc-producto`) en lugar de IP.
+
+### Configuración Clave
+Archivo: `application.properties`
+
+```properties
+server.port=8761
+spring.application.name=eureka-server
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+```
+
+
+## Auth Service
+
+Puerto: `8080` Base de Datos: `auth-service` Responsabilidad: Autenticación y Autorización.
+
+### Responsabilidades
+*   Gestión de Identidad: Usuarios, roles y perfiles.
+*   Emisión de Tokens: Generación de JWT firmados con RSA-256.
+*   Seguridad: Hashing de contraseñas con BCrypt.
+
+### Modelo de Datos
+*   Usuario: `id`, `username`, `email`, `password` (hash), `roles` (`USER`, `EMP`, `ADMIN`).
+
+### Endpoints Principales
+
+| Método | Endpoint | Descripción | Acceso |
+|:---|:---|:---|:---|
+| `POST` | `/api/auth/registro` | Registro de nuevos usuarios. | Público |
+| `POST` | `/api/auth/login` | Autenticación y obtención de JWT. | Público |
+| `GET` | `/api/usuarios` | Listado general de usuarios. | Admin |
+| `POST` | `/api/usuarios` | Creación administrativa de usuarios. | Admin |
+
+: API Endpoints - Auth Service
+
+
+## Product Service
+
+Puerto: `8081` Base de Datos: `productos` Responsabilidad: Catálogo y Empresas.
+
+### Responsabilidades
+*   Catálogo Comercial: Gestión de productos y categorías visibles.
+*   Multi-tenancy Lógico: Asociación de productos a empresas/emprendedores.
+*   Sincronización: Notifica creación de productos al servicio de inventario.
+
+### Modelo de Datos
+*   Producto: `id`, `nombre`, `precio`, `categoria_id`, `empresa_id`.
+*   Empresa: `id`, `ruc`, `razon_social`.
+
+### Endpoints Principales
+
+| Método | Endpoint | Descripción | Acceso |
+|:---|:---|:---|:---|
+| `GET` | `/api/productos` | Catálogo público paginado. | Público |
+| `GET` | `/api/productos/{id}` | Detalle de producto. | Público |
+| `POST` | `/api/productos` | Alta de productos. | Admin/Emp |
+| `PUT` | `/api/productos/{id}` | Modificación de productos. | Admin/Emp |
+| `GET` | `/api/categorias` | Listado de categorías. | Público |
+
+: API Endpoints - Product Service
+
+
+## Inventory Service
+
+Puerto: `8082` Base de Datos: `inventario` Responsabilidad: Logística y Stock.
+
+### Responsabilidades
+*   Control de Stock: Mantenimiento atómico del contador de unidades.
+*   Auditoría: Registro de todos los movimientos (`ENTRADA`, `SALIDA`, `AJUSTE`).
+*   Validación: Prevención de ventas sin stock suficiente.
+
+### Modelo de Datos
+*   Inventario: `producto_id`, `cantidad_actual`, `ubicacion`.
+*   Movimiento: `tipo`, `cantidad`, `fecha`, `motivo`.
+
+### Endpoints Principales
+
+| Método | Endpoint | Descripción |
+|:---|:---|:---|
+| `GET` | `/api/inventarios/producto/{id}` | Consultar stock actual. |
+| `PUT` | `/api/inventarios/producto/{id}/stock` | Ajuste manual de stock. |
+| `POST` | `/api/inventarios/salida-lote` | Descuento masivo por venta. |
+| `GET` | `/api/movimientos` | Historial de transacciones. |
+
+: API Endpoints - Inventory Service
+
+
+## Sales Service
+
+Puerto: `8083` Base de Datos: `ventas` Responsabilidad: Facturación y Pagos.
+
+### Responsabilidades
+*   Orquestación de Compra: Coordina validación de precios, stock y pago.
+*   Pasarela de Pagos: Integración segura con Kushki (Tarjeta de Crédito/Débito).
+*   Facturación: Generación de registros de venta inmutables.
+
+### Modelo de Datos
+*   Venta: `numero_factura`, `cliente_id`, `total`, `estado`, `fecha`.
+*   Detalle: `producto_id`, `cantidad`, `precio_unitario`.
+
+### Endpoints Principales
+
+| Método | Endpoint | Descripción |
+|:---|:---|:---|
+| `POST` | `/api/ventas` | Procesar compra (Carrito + Pago). |
+| `GET` | `/api/ventas` | Historial de pedidos. |
+| `GET` | `/api/ventas/{id}` | Detalle de factura. |
+| `PUT` | `/api/ventas/{id}/cancelar` | Anulación de venta. |
+
+: API Endpoints - Sales Service
+
+
+## Configuración Transversal
+
+Los microservicios comparten parámetros base definidos en `application.properties`:
+
+```properties
+# Conexión a Base de Datos (Puerto 5433)
+spring.datasource.url=jdbc:postgresql://localhost:5433/{db_name}
+spring.datasource.username=postgres
+
+# Registro en Eureka
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+
+# Exposición de Métricas
+management.endpoints.web.exposure.include=*
+```

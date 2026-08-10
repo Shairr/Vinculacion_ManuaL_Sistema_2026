@@ -1,0 +1,145 @@
+# Sección Seguridad
+
+El sistema utiliza OAuth2 con JWT y BCrypt para garantizar la integridad y confidencialidad de la información.
+
+\begin{importantbox}
+\textbf{Importante:} La clave RSA para firmar JWT debe rotarse e inyectarse de forma segura. Deshabilitar CSRF exige transmitir el token solo por headers. Prohibido usar comodines CORS en producción para evitar exposición a dominios maliciosos.
+\end{importantbox}
+
+\begin{infobox}
+\textbf{Información:} Se implementa seguridad stateless con OAuth2/JWT (RSA-256), hashing BCrypt, roles RBAC y consultas JPA parametrizadas (anti-SQL injection). Esto permite que cada microservicio valide accesos independientemente, sin consultar la base de autenticación.
+\end{infobox}
+
+## Arquitectura de Seguridad
+
+
+| Componente | Tecnología | Descripción |
+|:---|:---|:---|
+| Autenticación | JWT (RSA-256) | Tokens stateless. |
+| Autorización | RBAC | Roles: `USER`, `EMP`, `ADMIN`. |
+| Hashing | BCrypt | Hash de contraseñas. |
+
+: Componentes de Seguridad
+
+## Tokens JWT
+
+
+Claims:
+- `sub`: Usuario.
+- `scope`: Roles (ej. `ROLE_USER`).
+- `iat`: Emisión.
+- `exp`: Expiración (1h).
+
+### Flujo de Autenticación
+El proceso de autenticación sigue un esquema estándar de emisión y validación de tokens:
+
+1.  Credenciales: El cliente envía sus credenciales al servicio de autenticación (`msvc-auth`).
+2.  Validación: El servicio verifica el hash de la contraseña almacenada.
+3.  Emisión: Si es correcto, genera un token JWT firmado con un par de claves RSA.
+4.  Acceso: Para peticiones subsecuentes, el cliente incluye el token en el header `Authorization`.
+5.  Verificación: Cada microservicio destino valida la firma del token y los roles del usuario antes de procesar la solicitud.
+
+```{mermaid}
+%%| fig-width: 5.25
+%%| fig-height: 5.25
+%%| fig-align: center
+sequenceDiagram
+    participant C as Cliente
+    participant A as msvc-auth
+    participant S as Microservicio
+
+    C->>A: POST /auth/login
+    A->>A: Validar Credenciales (BCrypt)
+    A->>C: Retornar JWT
+    
+    C->>S: Request + Header [Authorization]
+    S->>S: Validar Firma RSA
+    S->>S: Verificar Roles
+    S-->>C: Respuesta
+```
+::: {.center}
+Figura 8: Flujo de Autenticación JWT
+\addcontentsline{lof}{figure}{\protect\numberline{8}Flujo de Autenticación JWT}
+:::
+
+## Configuración Spring Security
+
+
+Archivo: `SecurityConfig.java`.
+
+### Security Filter Chain
+
+```java
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    return http
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/api/auth/", "/swagger-ui/").permitAll()
+                    .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+            .build();
+}
+```
+
+### Gestión de Claves
+Claves RSA de 2048 bits generadas al inicio.
+
+
+
+## Roles y Permisos
+
+
+| Rol | Alcance |
+|---|---|
+| `ROLE_USER` | Catálogo, compras. |
+| `ROLE_EMP` | Productos propios, inventario. |
+| `ROLE_ADMIN` | Gestión global. |
+
+: Roles y permisos
+
+```java
+// Ejemplo PreAuthorize
+@PreAuthorize("hasRole('ADMIN')")
+public List<UsuarioDTO> listarUsuarios() { ... }
+```
+
+## Configuración CORS
+
+
+Archivo: `CorsConfig.java` (msvc-producto).
+
+```java
+@Override
+public void addCorsMappings(CorsRegistry registry) {
+    registry.addMapping("/api/")
+            .allowedOrigins("http://localhost:3000")
+            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            .allowedHeaders("*")
+            .allowCredentials(true)
+            .maxAge(3600);
+}
+```
+
+## Validación
+
+
+### Helper Sanitization
+
+```java
+public String sanitize(String input) {
+    if (input == null) return null;
+    return input.replaceAll("<[^>]*>", "").trim();
+}
+```
+
+### Prevención SQL Injection
+
+Uso de JPA/Hibernate con parámetros.
+
+```java
+@Query("SELECT p FROM Producto p WHERE p.nombre = :nombre")
+List<Producto> findByNombre(@Param("nombre") String nombre);
+```

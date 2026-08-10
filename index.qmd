@@ -1,0 +1,67 @@
+\activarEncabezado
+
+# Prefacio {.unnumbered}
+
+::: {.callout-note}
+## Proyecto del GAD Municipal del Cantón Sigchos
+
+
+Este proyecto fue desarrollado como trabajo de titulación para el Gobierno Autónomo Descentralizado Municipal del Cantón Sigchos, provincia de Cotopaxi, Ecuador.
+
+Repositorio: <https://github.com/BrayanDaniel/TrabajoTitulacion>
+:::
+
+Este manual técnico documenta la arquitectura, tecnologías y procedimientos de despliegue local del Sistema de Comercio Electrónico para los Emprendimientos del Cantón Sigchos.
+
+## Contenido
+
+
+El manual cubre:
+
+1. Introducción
+2. Arquitectura general del sistema basada en microservicios
+3. Tecnologías y frameworks utilizados
+4. Descripción detallada de cada microservicio
+5. Diseño de base de datos
+6. Implementación de seguridad y autenticación
+7. Documentación completa de APIs REST
+8. Procedimientos de despliegue local
+9. Mantenimiento y soporte del sistema
+10. Sección Pasarela de Pagos Payphone
+11. Documentación Oficial
+
+## Audiencia
+
+
+Este manual está dirigido a:
+
+- Desarrolladores de software con conocimientos en Java, Spring Boot y React
+- Arquitectos de software interesados en la estructura del sistema
+- Administradores de sistemas responsables del despliegue local
+- Personal de soporte técnico que requiera comprender el funcionamiento interno
+
+## Requisitos Previos
+
+
+Para trabajar con este sistema se requiere conocimientos en:
+
+- Programación en Java (Spring Boot, JPA)
+- Desarrollo frontend con React y Next.js
+- Bases de datos relacionales (PostgreSQL)
+- Arquitectura de microservicios
+- Control de versiones con Git
+
+## Versión del Sistema
+
+
+Versiones de Tecnologías:
+
+- Backend: Spring Boot 3.4.4-3.4.5, Java 17
+- Frontend: Next.js 13.4.9, React 18.2.0, TypeScript 5.0.4
+- Base de Datos: PostgreSQL 14+
+
+Repositorio GitHub: <https://github.com/BrayanDaniel/TrabajoTitulacion>
+
+
+*Desarrollado para el GAD Municipal del Cantón Sigchos* *Última actualización: 12/12/2025*
+
